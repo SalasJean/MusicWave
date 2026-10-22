@@ -1,5 +1,7 @@
 # MusicWave
 
+[![Quality Gate](https://github.com/SalasJean/MusicWave/actions/workflows/quality.yml/badge.svg)](https://github.com/SalasJean/MusicWave/actions/workflows/quality.yml)
+
 Proyecto independiente full-stack para gestionar solicitudes multimedia mediante una cola asíncrona, convertir audio a MP3 y entregarlo al navegador como un artefacto temporal de un solo uso.
 
 El repositorio está presentado principalmente como evidencia de formación en **QA y testing**: análisis de requerimientos, criterios de aceptación, casos funcionales y de regresión, pruebas de caja negra, validación de APIs REST, automatización y reporte de defectos.
