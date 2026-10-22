@@ -1,0 +1,325 @@
+---
+import AppLayout from '@/layouts/AppLayout.astro';
+import Button from '@/shared/components/ui/Button.astro';
+import IconButton from '@/shared/components/ui/IconButton.astro';
+import Input from '@/shared/components/ui/Input.astro';
+import Textarea from '@/shared/components/ui/Textarea.astro';
+import Select from '@/shared/components/ui/Select.astro';
+import Badge from '@/shared/components/ui/Badge.astro';
+import ProgressBar from '@/shared/components/ui/ProgressBar.astro';
+import Alert from '@/shared/components/ui/Alert.astro';
+import Toast from '@/shared/components/ui/Toast.astro';
+import Modal from '@/shared/components/ui/Modal.astro';
+import EmptyState from '@/shared/components/ui/EmptyState.astro';
+import Skeleton from '@/shared/components/ui/Skeleton.astro';
+import Spinner from '@/shared/components/ui/Spinner.astro';
+---
+
+<AppLayout title="Catálogo del Sistema Visual">
+  <div class="space-y-12 pb-16">
+    <!-- Encabezado del catálogo -->
+    <div
+      class="border-b border-slate-800 pb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+    >
+      <div>
+        <h1
+          class="text-2xl font-bold tracking-tight text-white flex items-center gap-2"
+        >
+          <span>🎨</span>
+          <span>Catálogo del Sistema Visual</span>
+        </h1>
+        <p class="mt-1 text-sm text-slate-400">
+          Verificación exhaustiva de componentes primitivos, tokens de diseño y
+          accesibilidad WCAG AA.
+        </p>
+      </div>
+
+      <!-- Theme Switcher interactivo sin librerías -->
+      <button
+        type="button"
+        id="theme-toggle-btn"
+        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer select-none"
+      >
+        ☀️ Alternar Tema
+      </button>
+    </div>
+
+    <!-- 1. Botones -->
+    <section class="space-y-4" aria-labelledby="section-buttons">
+      <h2
+        id="section-buttons"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        1. Botones (Button e IconButton)
+      </h2>
+      <div class="flex flex-wrap items-center gap-3">
+        <Button variant="primary">Primario</Button>
+        <Button variant="secondary">Secundario</Button>
+        <Button variant="danger">Peligro</Button>
+        <Button variant="outline">Contorno</Button>
+        <Button variant="ghost">Fantasma</Button>
+        <Button variant="primary" loading>Cargando</Button>
+        <Button variant="primary" disabled>Deshabilitado</Button>
+      </div>
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <Button size="sm">Pequeño (sm)</Button>
+        <Button size="md">Mediano (md)</Button>
+        <Button size="lg">Grande (lg)</Button>
+      </div>
+      <div class="flex items-center gap-3 pt-2">
+        <IconButton label="Configuración" variant="secondary">⚙️</IconButton>
+        <IconButton label="Descargar" variant="primary">⬇️</IconButton>
+        <IconButton label="Eliminar" variant="danger">🗑️</IconButton>
+        <IconButton label="Cargando" loading />
+      </div>
+    </section>
+
+    <!-- 2. Badges de Estado -->
+    <section class="space-y-4" aria-labelledby="section-badges">
+      <h2
+        id="section-badges"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        2. Badges de Estado (Ciclo de Vida de Descarga)
+      </h2>
+      <div class="flex flex-wrap items-center gap-3">
+        <Badge variant="pending" dot>PENDING</Badge>
+        <Badge variant="queued" dot>QUEUED</Badge>
+        <Badge variant="downloading" dot>DOWNLOADING</Badge>
+        <Badge variant="converting" dot>CONVERTING</Badge>
+        <Badge variant="completed" dot>COMPLETED</Badge>
+        <Badge variant="failed" dot>FAILED</Badge>
+        <Badge variant="cancelled">CANCELLED</Badge>
+      </div>
+    </section>
+
+    <!-- 3. Barras de Progreso -->
+    <section class="space-y-4" aria-labelledby="section-progress">
+      <h2
+        id="section-progress"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        3. Barra de Progreso (ProgressBar)
+      </h2>
+      <div class="space-y-4 max-w-2xl">
+        <ProgressBar
+          label="Descarga activa"
+          value={68}
+          status="downloading"
+          speed="2.4 MiB/s"
+          eta="00:14"
+        />
+        <ProgressBar
+          label="Conversión FFmpeg"
+          value={95}
+          status="converting"
+          speed="Extrayendo MP3 192K"
+        />
+        <ProgressBar label="Completado" value={100} status="completed" />
+        <ProgressBar
+          label="Fallo durante descarga"
+          value={42}
+          status="failed"
+        />
+      </div>
+    </section>
+
+    <!-- 4. Formularios (Input, Textarea, Select) -->
+    <section class="space-y-4" aria-labelledby="section-forms">
+      <h2
+        id="section-forms"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        4. Formularios Accesibles
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+        <Input
+          id="test-url"
+          name="url"
+          type="url"
+          label="URL del medio"
+          placeholder="https://www.youtube.com/watch?v=..."
+          hint="Admite enlaces públicos HTTP/HTTPS compatibles con yt-dlp"
+          required
+        />
+        <Input
+          id="test-error"
+          name="error-url"
+          label="URL con error"
+          value="http://127.0.0.1/privado"
+          error="Destino no permitido: la URL apunta a una dirección de red privada."
+        />
+        <Select
+          id="test-quality"
+          name="audioQuality"
+          label="Calidad de audio MP3"
+          options={[
+            { value: '128K', label: '128K (Normal)' },
+            { value: '192K', label: '192K (Estándar recomendada)' },
+            { value: '256K', label: '256K (Alta)' },
+            { value: '320K', label: '320K (Máxima)' },
+          ]}
+          value="192K"
+          hint="Preferencia de tasa de bits para la conversión"
+        />
+        <Textarea
+          id="test-bulk"
+          name="bulkUrls"
+          label="Lote de URLs"
+          placeholder="Pegue una URL por línea..."
+          rows={3}
+          hint="Hasta 100 enlaces por solicitud"
+        />
+      </div>
+    </section>
+
+    <!-- 5. Alertas -->
+    <section class="space-y-4" aria-labelledby="section-alerts">
+      <h2
+        id="section-alerts"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        5. Alertas Semánticas (Alert)
+      </h2>
+      <div class="space-y-3 max-w-3xl">
+        <Alert variant="info" title="Información del servicio" dismissible>
+          Los workers están saludables y listos para procesar descargas en
+          paralelo.
+        </Alert>
+        <Alert variant="success" title="Descarga de MP3 lista">
+          El archivo ha sido convertido exitosamente a MP3 de 192K.
+        </Alert>
+        <Alert variant="warning" title="Límite de tasa alcanzado">
+          Se han realizado múltiples peticiones consecutivas. Espere 10 segundos
+          antes de reintentar.
+        </Alert>
+        <Alert variant="error" title="Error de conexión (RFC 9457)">
+          No fue posible resolver el host de destino. Verifique que la URL sea
+          válida y pública.
+        </Alert>
+      </div>
+    </section>
+
+    <!-- 6. Notificaciones Flotantes (Toast) -->
+    <section class="space-y-4" aria-labelledby="section-toasts">
+      <h2
+        id="section-toasts"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        6. Notificaciones Flotantes (Toast)
+      </h2>
+      <div class="flex flex-wrap gap-4">
+        <Toast
+          variant="success"
+          title="Trabajo encolado"
+          message="Se agregó 1 URL a la bandeja de pendientes."
+        />
+        <Toast
+          variant="error"
+          title="Error 409"
+          message="Esta descarga ya fue consumida anteriormente."
+        />
+      </div>
+    </section>
+
+    <!-- 7. Ventana Modal -->
+    <section class="space-y-4" aria-labelledby="section-modal">
+      <h2
+        id="section-modal"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        7. Ventana Modal Accesible (Dialog)
+      </h2>
+      <div>
+        <Button
+          variant="secondary"
+          onclick="document.getElementById('demo-modal')?.showModal()"
+        >
+          Abrir Ventana Modal de Demostración
+        </Button>
+
+        <Modal
+          id="demo-modal"
+          title="Confirmar Limpieza de Cola"
+          description="Esta acción ocultará los trabajos completados de la vista."
+          maxWidth="md"
+        >
+          <p class="text-slate-300">
+            ¿Está seguro de que desea limpiar la bandeja de descargas? Los
+            archivos MP3 temporales ya descargados serán purgados del
+            almacenamiento efímero del servidor.
+          </p>
+
+          <div slot="footer">
+            <Button
+              variant="ghost"
+              onclick="document.getElementById('demo-modal')?.close()"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onclick="document.getElementById('demo-modal')?.close()"
+            >
+              Confirmar Limpieza
+            </Button>
+          </div>
+        </Modal>
+      </div>
+    </section>
+
+    <!-- 8. Estados Vacíos (EmptyState) -->
+    <section class="space-y-4" aria-labelledby="section-empty">
+      <h2
+        id="section-empty"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        8. Estados Vacíos (EmptyState)
+      </h2>
+      <div class="max-w-xl">
+        <EmptyState
+          icon="🎵"
+          title="Bandeja de descargas vacía"
+          description="Agregue URLs de YouTube o cargue un archivo TXT para comenzar a descargar y convertir música."
+        >
+          <Button variant="primary" size="sm">Agregar Descargas</Button>
+        </EmptyState>
+      </div>
+    </section>
+
+    <!-- 9. Cargas y Esqueletos (Skeleton y Spinner) -->
+    <section class="space-y-4" aria-labelledby="section-loading">
+      <h2
+        id="section-loading"
+        class="text-lg font-semibold text-slate-200 border-b border-slate-800/60 pb-2"
+      >
+        9. Esqueletos y Spinners (Skeleton y Spinner)
+      </h2>
+      <div class="flex items-center gap-6">
+        <Spinner size="sm" />
+        <Spinner size="md" />
+        <Spinner size="lg" />
+      </div>
+      <div class="space-y-2 max-w-md pt-2">
+        <Skeleton variant="text" width="60%" />
+        <Skeleton variant="rectangular" height="40px" />
+        <div class="flex items-center gap-3 pt-2">
+          <Skeleton variant="circular" width="36px" height="36px" />
+          <Skeleton variant="text" width="70%" />
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const html = document.documentElement;
+        const isLight = html.getAttribute('data-theme') === 'light';
+        html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+        themeBtn.textContent = isLight ? '☀️ Alternar Tema' : '🌙 Tema Oscuro';
+      });
+    }
+  </script>
+</AppLayout>

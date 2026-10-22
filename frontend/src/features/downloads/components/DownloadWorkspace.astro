@@ -1,0 +1,145 @@
+---
+import AddUrlForm from './AddUrlForm.astro';
+import BulkModal from './BulkModal.astro';
+import ImportTxtModal from './ImportTxtModal.astro';
+import QueueControls from './QueueControls.astro';
+import DownloadList from './DownloadList.astro';
+---
+
+<div id="download-workspace" class="space-y-8 max-w-5xl mx-auto">
+  <!-- Banner de estado de red / desconexión -->
+  <div
+    id="workspace-network-alert"
+    role="alert"
+    class="hidden p-3.5 rounded-xl border border-amber-800/80 bg-amber-950/70 text-xs text-amber-200 flex items-center justify-between gap-3 shadow-sm transition-all"
+  >
+    <div class="flex items-center gap-2.5">
+      <span aria-hidden="true" class="text-base">📡</span>
+      <div>
+        <p class="font-semibold text-amber-100">Conexión de red interrumpida</p>
+        <p class="text-amber-300/80 mt-0.5">
+          La aplicación pausará las consultas automáticas hasta que se
+          restablezca la conexión.
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      id="retry-network-btn"
+      class="px-3 py-1.5 rounded-md bg-amber-800 hover:bg-amber-700 text-white font-semibold text-xs cursor-pointer transition-colors shrink-0 shadow-sm"
+    >
+      Reintentar conexión
+    </button>
+  </div>
+
+  <!-- Encabezado del espacio de trabajo -->
+  <div
+    class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4"
+  >
+    <div>
+      <h1
+        class="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5"
+      >
+        <span>📥</span>
+        <span>Bandeja de Descargas</span>
+      </h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Gestión asíncrona de descargas y conversión a MP3 con soporte de
+        aceptación parcial y entrega efímera.
+      </p>
+    </div>
+
+    <!-- Acceso rápido a Ajustes -->
+    <div class="flex items-center gap-2 shrink-0">
+      <a
+        href="/settings"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition-colors shadow-sm cursor-pointer"
+        title="Configurar concurrencia y calidad de audio MP3"
+      >
+        <span aria-hidden="true">⚙️</span>
+        <span>Ajustes de audio</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Ingesta de URLs: formulario individual y botones para modales masivos -->
+  <section aria-labelledby="heading-add-downloads" class="space-y-2">
+    <h2 id="heading-add-downloads" class="sr-only">Agregar descargas</h2>
+    <AddUrlForm />
+  </section>
+
+  <!-- Controles y operaciones de cola -->
+  <section aria-labelledby="heading-queue-controls" class="space-y-2">
+    <h2 id="heading-queue-controls" class="sr-only">Controles de la cola</h2>
+    <QueueControls />
+  </section>
+
+  <!-- Lista paginada determinista de trabajos -->
+  <section aria-labelledby="heading-queue-list" class="space-y-2">
+    <h2 id="heading-queue-list" class="sr-only">Lista de descargas</h2>
+    <DownloadList />
+  </section>
+
+  <!-- Modales para ingesta masiva y archivo TXT -->
+  <BulkModal />
+  <ImportTxtModal />
+</div>
+
+<script>
+  import { sseClient } from '@/shared/api/sseClient';
+  import { downloadStore } from '../stores/downloadStore';
+
+  const networkAlert = document.getElementById('workspace-network-alert');
+  const retryNetworkBtn = document.getElementById('retry-network-btn');
+
+  // Network offline / online lifecycle
+  function handleOffline() {
+    networkAlert?.classList.remove('hidden');
+    downloadStore.setSseStatus('disconnected');
+  }
+
+  function handleOnline() {
+    networkAlert?.classList.add('hidden');
+    sseClient.connect();
+    downloadStore.loadPage();
+  }
+
+  window.addEventListener('offline', handleOffline);
+  window.addEventListener('online', handleOnline);
+
+  retryNetworkBtn?.addEventListener('click', () => {
+    if (navigator.onLine) {
+      handleOnline();
+    } else {
+      sseClient.connect();
+      downloadStore.loadPage();
+    }
+  });
+
+  // Reconcile and ensure SSE active when tab regains focus or visibility
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && navigator.onLine) {
+      downloadStore.loadPage();
+      if (
+        sseClient.getStatus() !== 'connected' &&
+        sseClient.getStatus() !== 'connecting'
+      ) {
+        sseClient.connect();
+      }
+    }
+  });
+
+  // Global accessibility keyboard shortcut (Alt+N focuses single URL input)
+  window.addEventListener('keydown', (e) => {
+    if (e.altKey && (e.key === 'n' || e.key === 'N')) {
+      e.preventDefault();
+      const input = document.getElementById('single-url-input');
+      input?.focus();
+    }
+  });
+
+  // Clean disconnection when navigating or unloading tab
+  window.addEventListener('beforeunload', () => {
+    sseClient.disconnect();
+  });
+</script>

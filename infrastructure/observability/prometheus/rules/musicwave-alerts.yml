@@ -1,0 +1,46 @@
+groups:
+  - name: musicwave-availability
+    rules:
+      - alert: MusicWaveServiceUnavailable
+        expr: up{job=~"musicwave-(api|worker)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MusicWave service {{ $labels.job }} is unavailable"
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for two minutes."
+
+      - alert: MusicWaveSustainedServerErrors
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{application=~"musicwave-.+",status=~"5.."}[5m]))
+          /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count{application=~"musicwave-.+"}[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained HTTP 5xx rate in {{ $labels.application }}"
+          description: "More than five percent of HTTP requests have failed for five minutes."
+
+      - alert: MusicWaveOutboxBacklog
+        expr: musicwave_outbox_events{state="ready"} > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MusicWave outbox backlog is growing"
+          description: "More than 100 ready events have remained unpublished for ten minutes."
+
+      - alert: MusicWaveWorkerCapacityExhausted
+        expr: |
+          musicwave_worker_executions_active
+          /
+          clamp_min(musicwave_worker_executions_capacity, 1)
+          >= 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MusicWave worker capacity is exhausted"
+          description: "All configured download execution slots have been occupied for ten minutes."

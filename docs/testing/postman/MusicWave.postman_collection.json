@@ -1,0 +1,554 @@
+{
+  "info": {
+    "_postman_id": "823795c7-ee97-4260-acfb-d7b8aba419bf",
+    "name": "MusicWave Backend v1 - Manual Verification",
+    "description": "Ordered manual verification of all 17 stable MusicWave backend operations. Read docs/testing/MANUAL_API_TESTING.md before running. SSE, asynchronous downloads and the local TXT upload require manual interaction.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{bearerToken}}", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('runId')) {",
+          "    pm.environment.set('runId', Date.now().toString());",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const correlationId = pm.response.headers.get('X-Request-ID');",
+          "if (correlationId) { pm.environment.set('lastRequestId', correlationId); }",
+          "pm.test('Response includes X-Request-ID', function () {",
+          "    pm.expect(correlationId).to.be.a('string').and.not.empty;",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "bearerToken", "value": "" },
+    { "key": "validMediaUrl", "value": "https://www.youtube.com/watch?v=BaW_jenozKc" },
+    { "key": "failureUrl", "value": "https://example.com/not-media" },
+    { "key": "unknownJobId", "value": "00000000-0000-0000-0000-000000000099" }
+  ],
+  "item": [
+    {
+      "name": "00 - Preflight",
+      "description": "The operational checks must be healthy before product endpoint testing.",
+      "item": [
+        {
+          "name": "Actuator health (operational extra)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/health",
+            "description": "Operational endpoint; not counted among the stable 17 product operations."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Application is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+          ] } }]
+        },
+        {
+          "name": "System status",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/system/status"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "Tool status",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/tools/status"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Workers are ready', () => pm.expect(pm.response.json().status).to.eql('READY'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 - Settings",
+      "item": [
+        {
+          "name": "Get settings",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/settings" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Settings shape', function () { const b = pm.response.json(); pm.expect(b.maxConcurrency).to.be.a('number'); pm.expect(b.audioQuality).to.be.a('string'); });"
+          ] } }]
+        },
+        {
+          "name": "Update settings to test values",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"maxConcurrency\": 2,\n  \"audioQuality\": \"128K\"\n}" },
+            "url": "{{baseUrl}}/api/v1/settings"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Test settings persisted', function () { const b = pm.response.json(); pm.expect(b.maxConcurrency).to.eql(2); pm.expect(b.audioQuality).to.eql('128K'); });"
+          ] } }]
+        },
+        {
+          "name": "Confirm updated settings",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/settings" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Stored values match', function () { const b = pm.response.json(); pm.expect(b.maxConcurrency).to.eql(2); pm.expect(b.audioQuality).to.eql('128K'); });"
+          ] } }]
+        },
+        {
+          "name": "Restore settings",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"maxConcurrency\": 5,\n  \"audioQuality\": \"192K\"\n}" },
+            "url": "{{baseUrl}}/api/v1/settings"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Defaults restored', function () { const b = pm.response.json(); pm.expect(b.maxConcurrency).to.eql(5); pm.expect(b.audioQuality).to.eql('192K'); });"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - Ingestion and queries",
+      "description": "Creates state used by queue, SSE, artifact and retry verification.",
+      "item": [
+        {
+          "name": "Create single download",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-single-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"{{validMediaUrl}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+            "const b = pm.response.json();",
+            "pm.test('Created one pending job', function () { pm.expect(b.replayed).to.eql(false); pm.expect(b.createdCount).to.eql(1); pm.expect(b.jobs[0].status).to.eql('PENDING'); });",
+            "if (b.requestId) { pm.environment.set('singleRequestId', b.requestId); }",
+            "if (b.jobs && b.jobs.length) { pm.environment.set('singleJobId', b.jobs[0].id); }"
+          ] } }]
+        },
+        {
+          "name": "Replay single download",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-single-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"{{validMediaUrl}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200 replay', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('Original request is replayed', function () { pm.expect(b.replayed).to.eql(true); pm.expect(b.requestId).to.eql(pm.environment.get('singleRequestId')); pm.expect(b.jobs[0].id).to.eql(pm.environment.get('singleJobId')); });"
+          ] } }]
+        },
+        {
+          "name": "Reject reused key with different payload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-single-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://example.com/different-media\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+            "pm.test('Stable conflict code', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_KEY_REUSED'));"
+          ] } }]
+        },
+        {
+          "name": "List downloads",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads?page=0&size=20" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Page shape and saved job visible', function () { const b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b.items.map(x => x.id)).to.include(pm.environment.get('singleJobId')); });"
+          ] } }]
+        },
+        {
+          "name": "Get single download",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{singleJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Correct owned job', () => pm.expect(pm.response.json().id).to.eql(pm.environment.get('singleJobId')));"
+          ] } }]
+        },
+        {
+          "name": "Artifact before completion",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{singleJobId}}/artifact" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+            "pm.test('Artifact is not ready', () => pm.expect(pm.response.json().code).to.eql('ARTIFACT_NOT_READY'));"
+          ] } }]
+        },
+        {
+          "name": "Create cancellation fixture",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-cancel-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"{{validMediaUrl}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201 or existing replay', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const b = pm.response.json(); if (b.jobs && b.jobs.length) { pm.environment.set('cancelJobId', b.jobs[0].id); }"
+          ] } }]
+        },
+        {
+          "name": "Cancel pending download",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/downloads/{{cancelJobId}}/cancel" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Job is cancelled', () => pm.expect(pm.response.json().status).to.eql('CANCELLED'));"
+          ] } }]
+        },
+        {
+          "name": "Create bulk with partial rejection",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-bulk-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"urls\": [\n    \"{{validMediaUrl}}\",\n    \"not-a-url\"\n  ]\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads/bulk"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201 or existing replay', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const b = pm.response.json();",
+            "pm.test('Valid entry created and invalid entry rejected', function () { pm.expect(b.createdCount).to.eql(1); pm.expect(b.rejectedCount).to.eql(1); pm.expect(b.rejected[0].position).to.eql(2); });",
+            "if (b.jobs && b.jobs.length) { pm.environment.set('bulkJobId', b.jobs[0].id); }"
+          ] } }]
+        },
+        {
+          "name": "Import TXT",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "manual-import-{{runId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "description": "Select docs/testing/sample-urls.txt before sending.", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/downloads/import",
+            "description": "Select docs/testing/sample-urls.txt manually. Postman exports do not embed local files."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201 or existing replay', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const b = pm.response.json();",
+            "pm.test('TXT has one created and one rejected entry', function () { pm.expect(b.createdCount).to.eql(1); pm.expect(b.rejectedCount).to.eql(1); });",
+            "if (b.jobs && b.jobs.length) { pm.environment.set('importJobId', b.jobs[0].id); }"
+          ] } }]
+        },
+        {
+          "name": "Create failure fixture",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "manual-failure-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"{{failureUrl}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201 or existing replay', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const b = pm.response.json(); if (b.jobs && b.jobs.length) { pm.environment.set('failureJobId', b.jobs[0].id); }"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - Realtime events",
+      "description": "Open the live stream in a separate tab before queue start. Streaming requests are intentionally manual.",
+      "item": [
+        {
+          "name": "Live event stream",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/event-stream" }],
+            "url": "{{baseUrl}}/api/v1/events",
+            "description": "Leave open in a separate Postman tab, then start the queue."
+          }
+        },
+        {
+          "name": "Reconnect from Last-Event-ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" },
+              { "key": "Last-Event-ID", "value": "{{lastEventId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/events",
+            "description": "Set lastEventId to an event ID observed in the first stream."
+          }
+        },
+        {
+          "name": "Malformed Last-Event-ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "text/event-stream" },
+              { "key": "Last-Event-ID", "value": "not-a-redis-id" }
+            ],
+            "url": "{{baseUrl}}/api/v1/events"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+            "pm.test('Stable cursor error', () => pm.expect(pm.response.json().code).to.eql('INVALID_EVENT_CURSOR'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 - Queue, execution, artifact and retry",
+      "description": "Run after ingestion. Poll detail requests until terminal states before artifact/retry checks.",
+      "item": [
+        {
+          "name": "Start queue",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/queue/start" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 202 when work is queued', () => pm.response.to.have.status(202));",
+            "pm.test('At least one job queued', () => pm.expect(pm.response.json().queuedCount).to.be.above(0));"
+          ] } }]
+        },
+        {
+          "name": "Start queue again (idempotent no-op)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/queue/start" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Nothing queued twice', () => pm.expect(pm.response.json().queuedCount).to.eql(0));"
+          ] } }]
+        },
+        {
+          "name": "Poll single download",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{singleJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "console.log('singleJobId status:', pm.response.json().status);"
+          ] } }]
+        },
+        {
+          "name": "Poll bulk download",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{bulkJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "console.log('bulkJobId status:', pm.response.json().status);"
+          ] } }]
+        },
+        {
+          "name": "Poll imported download",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{importJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "console.log('importJobId status:', pm.response.json().status);"
+          ] } }]
+        },
+        {
+          "name": "Download completed MP3",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{singleJobId}}/artifact" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200 after completion', () => pm.response.to.have.status(200));",
+            "pm.test('MP3 response is safe and not cacheable', function () { pm.expect(pm.response.headers.get('Content-Type')).to.include('audio/mpeg'); pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'); pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });"
+          ] } }]
+        },
+        {
+          "name": "Confirm artifact was consumed",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{singleJobId}}/artifact" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 410', () => pm.response.to.have.status(410));",
+            "pm.test('One-shot artifact is gone', () => pm.expect(pm.response.json().code).to.eql('ARTIFACT_ALREADY_DOWNLOADED'));"
+          ] } }]
+        },
+        {
+          "name": "Get failure fixture",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{failureJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "console.log('failureJobId status:', pm.response.json().status);"
+          ] } }]
+        },
+        {
+          "name": "Retry failed download",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/downloads/{{failureJobId}}/retry" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Job returns to pending', () => pm.expect(pm.response.json().status).to.eql('PENDING'));"
+          ] } }]
+        },
+        {
+          "name": "Cancel active queue",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/queue/cancel" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Cancellation counts returned', function () { const b = pm.response.json(); pm.expect(b.cancelledCount).to.be.a('number'); pm.expect(b.cancellationRequestedCount).to.be.a('number'); });"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "05 - Cleanup",
+      "description": "Clearing hides visible jobs but deliberately keeps durable audit state.",
+      "item": [
+        {
+          "name": "Clear completed downloads",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/queue/completed" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Clear counts returned', () => pm.expect(pm.response.json().clearedCount).to.be.a('number'));"
+          ] } }]
+        },
+        {
+          "name": "Clear visible queue",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/queue" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('Clear and cancellation counts returned', function () { const b = pm.response.json(); pm.expect(b.clearedCount).to.be.a('number'); pm.expect(b.cancelledCount).to.be.a('number'); pm.expect(b.cancellationRequestedCount).to.be.a('number'); });"
+          ] } }]
+        },
+        {
+          "name": "Confirm visible queue is empty",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads?page=0&size=20" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('No visible jobs remain', () => pm.expect(pm.response.json().totalElements).to.eql(0));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "06 - Negative checks",
+      "description": "Safe validation, outbound destination, ownership-hiding and state-conflict checks.",
+      "item": [
+        {
+          "name": "Reject invalid URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "negative-invalid-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"not-a-url\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+            "pm.test('RFC 9457 problem response', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));"
+          ] } }]
+        },
+        {
+          "name": "Reject loopback destination",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "negative-loopback-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"http://127.0.0.1/private\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+            "pm.test('Outbound guard code', () => pm.expect(pm.response.json().code).to.eql('URL_DESTINATION_NOT_ALLOWED'));"
+          ] } }]
+        },
+        {
+          "name": "Reject invalid settings",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"maxConcurrency\": 99,\n  \"audioQuality\": \"LOSSLESS\"\n}" },
+            "url": "{{baseUrl}}/api/v1/settings"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 400', () => pm.response.to.have.status(400));"
+          ] } }]
+        },
+        {
+          "name": "Hide unknown download",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads/{{unknownJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+            "pm.test('Stable not-found code', () => pm.expect(pm.response.json().code).to.eql('DOWNLOAD_NOT_FOUND'));"
+          ] } }]
+        },
+        {
+          "name": "Create wrong-state retry fixture",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "negative-retry-{{runId}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"{{validMediaUrl}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/downloads"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 201 or existing replay', () => pm.expect([200, 201]).to.include(pm.response.code));",
+            "const b = pm.response.json(); if (b.jobs && b.jobs.length) { pm.environment.set('wrongStateJobId', b.jobs[0].id); }"
+          ] } }]
+        },
+        {
+          "name": "Reject retry for pending job",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/downloads/{{wrongStateJobId}}/retry" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+            "pm.test('Stable retry conflict code', () => pm.expect(pm.response.json().code).to.eql('DOWNLOAD_NOT_RETRYABLE'));"
+          ] } }]
+        },
+        {
+          "name": "Final cleanup after negative checks",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/queue" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "Confirm final visible queue is empty",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/downloads?page=0&size=20" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+            "pm.test('No visible jobs remain', () => pm.expect(pm.response.json().totalElements).to.eql(0));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

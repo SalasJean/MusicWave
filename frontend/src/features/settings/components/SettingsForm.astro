@@ -1,0 +1,441 @@
+---
+import Button from '@/shared/components/ui/Button.astro';
+import Alert from '@/shared/components/ui/Alert.astro';
+import Skeleton from '@/shared/components/ui/Skeleton.astro';
+import {
+  AUDIO_QUALITY_OPTIONS,
+  MIN_CONCURRENCY,
+  MAX_CONCURRENCY,
+  DEFAULT_CONCURRENCY,
+  DEFAULT_AUDIO_QUALITY,
+} from '../model/settingsModel';
+
+interface Props {
+  initialConcurrency?: number;
+  initialQuality?: string;
+}
+
+const {
+  initialConcurrency = DEFAULT_CONCURRENCY,
+  initialQuality = DEFAULT_AUDIO_QUALITY,
+} = Astro.props;
+---
+
+<section
+  id="settings-container"
+  aria-labelledby="settings-heading"
+  class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 sm:p-6 shadow-sm space-y-6"
+>
+  <!-- Cabecera de la sección -->
+  <div
+    class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800"
+  >
+    <div>
+      <h2
+        id="settings-heading"
+        class="text-lg font-semibold text-white tracking-wide"
+      >
+        Preferencias de Descarga y Audio
+      </h2>
+      <p class="text-xs text-slate-400 mt-1">
+        Los cambios guardados se persisten de manera autoritativa en el backend
+        para todas tus tareas.
+      </p>
+    </div>
+
+    <!-- Indicador de sincronización -->
+    <div class="shrink-0">
+      <span
+        id="sync-status-badge"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-800 text-slate-400 border-slate-700 select-none transition-colors"
+      >
+        <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+        <span id="sync-status-text">Sincronizado</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Estado esqueleto durante carga inicial -->
+  <div id="settings-loading" class="hidden space-y-4 py-2">
+    <Skeleton variant="rectangular" height="72px" class="rounded-lg" />
+    <Skeleton variant="rectangular" height="72px" class="rounded-lg" />
+    <div class="flex justify-end gap-3 pt-2">
+      <Skeleton
+        variant="rectangular"
+        height="40px"
+        width="100px"
+        class="rounded-lg"
+      />
+      <Skeleton
+        variant="rectangular"
+        height="40px"
+        width="140px"
+        class="rounded-lg"
+      />
+    </div>
+  </div>
+
+  <!-- Banner de éxito -->
+  <div id="settings-success-alert-wrapper" class="hidden">
+    <Alert id="settings-success-alert" variant="success" dismissible>
+      <span id="settings-success-text"
+        >Ajustes guardados correctamente en el servidor.</span
+      >
+    </Alert>
+  </div>
+
+  <!-- Banner de error general -->
+  <div id="settings-error-alert-wrapper" class="hidden">
+    <Alert id="settings-error-alert" variant="error" dismissible>
+      <span id="settings-error-text"
+        >Ocurrió un error al procesar la solicitud.</span
+      >
+    </Alert>
+  </div>
+
+  <!-- Formulario de configuración -->
+  <form id="settings-form" class="space-y-6" novalidate>
+    <!-- Campo: Concurrencia máxima -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <label
+          for="max-concurrency-input"
+          class="block text-sm font-medium text-slate-200"
+        >
+          Descargas simultáneas máximas
+          <span class="text-red-400 ml-0.5" aria-hidden="true">*</span>
+        </label>
+        <span
+          id="concurrency-value-display"
+          class="font-mono text-sm font-semibold text-emerald-400 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-900/60"
+        >
+          {initialConcurrency}
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+        <!-- Input numérico -->
+        <input
+          type="number"
+          id="max-concurrency-input"
+          name="maxConcurrency"
+          min={MIN_CONCURRENCY}
+          max={MAX_CONCURRENCY}
+          step="1"
+          value={initialConcurrency}
+          required
+          aria-describedby="concurrency-hint concurrency-error"
+          class="sm:col-span-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono"
+        />
+
+        <!-- Slider de ajuste rápido -->
+        <div class="sm:col-span-3 flex items-center gap-3">
+          <input
+            type="range"
+            id="max-concurrency-slider"
+            min={MIN_CONCURRENCY}
+            max={MAX_CONCURRENCY}
+            step="1"
+            value={initialConcurrency}
+            aria-label="Ajustar descargas simultáneas máximas con deslizador"
+            class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+          />
+          <div
+            class="flex items-center justify-between text-[11px] text-slate-500 select-none w-14 text-right"
+          >
+            <span>{MIN_CONCURRENCY}</span>
+            <span>-</span>
+            <span>{MAX_CONCURRENCY}</span>
+          </div>
+        </div>
+      </div>
+
+      <p id="concurrency-hint" class="text-xs text-slate-400">
+        Límite de trabajos de descarga y conversión concurrentes procesados en
+        paralelo (rango oficial: {MIN_CONCURRENCY} a {MAX_CONCURRENCY}).
+      </p>
+
+      <!-- Error de campo -->
+      <div
+        id="concurrency-error"
+        role="alert"
+        class="hidden text-xs text-red-400 font-medium flex items-center gap-1.5 pt-0.5"
+      >
+        <span aria-hidden="true">⚠️</span>
+        <span id="concurrency-error-text"></span>
+      </div>
+    </div>
+
+    <!-- Campo: Calidad de audio MP3 -->
+    <div class="space-y-2">
+      <label
+        for="audio-quality-select"
+        class="block text-sm font-medium text-slate-200"
+      >
+        Calidad de audio preferida (Bitrate MP3)
+        <span class="text-red-400 ml-0.5" aria-hidden="true">*</span>
+      </label>
+
+      <select
+        id="audio-quality-select"
+        name="audioQuality"
+        required
+        aria-describedby="audio-quality-hint audio-quality-error"
+        class="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors cursor-pointer"
+      >
+        {
+          AUDIO_QUALITY_OPTIONS.map((opt) => (
+            <option value={opt.value} selected={opt.value === initialQuality}>
+              {opt.label}
+            </option>
+          ))
+        }
+      </select>
+
+      <p id="audio-quality-hint" class="text-xs text-slate-400">
+        Bitrate de destino aplicado por ffmpeg durante la extracción de audio.
+      </p>
+
+      <!-- Error de campo -->
+      <div
+        id="audio-quality-error"
+        role="alert"
+        class="hidden text-xs text-red-400 font-medium flex items-center gap-1.5 pt-0.5"
+      >
+        <span aria-hidden="true">⚠️</span>
+        <span id="audio-quality-error-text"></span>
+      </div>
+    </div>
+
+    <!-- Botonera de acciones -->
+    <div
+      class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-800"
+    >
+      <Button
+        id="reset-settings-btn"
+        type="button"
+        variant="secondary"
+        size="md"
+        disabled
+      >
+        <span>Restablecer</span>
+      </Button>
+
+      <Button
+        id="save-settings-btn"
+        type="submit"
+        variant="primary"
+        size="md"
+        disabled
+      >
+        <span
+          id="save-btn-spinner"
+          class="hidden w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"
+        ></span>
+        <span id="save-btn-text">Guardar ajustes</span>
+      </Button>
+    </div>
+  </form>
+</section>
+
+<script>
+  import { settingsStore, type SettingsState } from '../stores/settingsStore';
+
+  const form = document.getElementById(
+    'settings-form'
+  ) as HTMLFormElement | null;
+  const concurrencyInput = document.getElementById(
+    'max-concurrency-input'
+  ) as HTMLInputElement | null;
+  const concurrencySlider = document.getElementById(
+    'max-concurrency-slider'
+  ) as HTMLInputElement | null;
+  const concurrencyDisplay = document.getElementById(
+    'concurrency-value-display'
+  );
+  const concurrencyError = document.getElementById('concurrency-error');
+  const concurrencyErrorText = document.getElementById(
+    'concurrency-error-text'
+  );
+
+  const qualitySelect = document.getElementById(
+    'audio-quality-select'
+  ) as HTMLSelectElement | null;
+  const qualityError = document.getElementById('audio-quality-error');
+  const qualityErrorText = document.getElementById('audio-quality-error-text');
+
+  const saveBtn = document.getElementById(
+    'save-settings-btn'
+  ) as HTMLButtonElement | null;
+  const saveBtnText = document.getElementById('save-btn-text');
+  const saveBtnSpinner = document.getElementById('save-btn-spinner');
+  const resetBtn = document.getElementById(
+    'reset-settings-btn'
+  ) as HTMLButtonElement | null;
+
+  const successWrapper = document.getElementById(
+    'settings-success-alert-wrapper'
+  );
+  const successText = document.getElementById('settings-success-text');
+  const errorWrapper = document.getElementById('settings-error-alert-wrapper');
+  const errorText = document.getElementById('settings-error-text');
+  const loadingState = document.getElementById('settings-loading');
+
+  const syncBadge = document.getElementById('sync-status-badge');
+  const syncText = document.getElementById('sync-status-text');
+
+  function updateUi(state: SettingsState): void {
+    // Sync concurrency input & slider
+    if (
+      concurrencyInput &&
+      concurrencyInput.value !== String(state.settings.maxConcurrency)
+    ) {
+      concurrencyInput.value = String(state.settings.maxConcurrency);
+    }
+    if (
+      concurrencySlider &&
+      concurrencySlider.value !== String(state.settings.maxConcurrency)
+    ) {
+      concurrencySlider.value = String(state.settings.maxConcurrency);
+    }
+    if (concurrencyDisplay) {
+      concurrencyDisplay.textContent = String(state.settings.maxConcurrency);
+    }
+
+    // Sync quality select
+    if (qualitySelect && qualitySelect.value !== state.settings.audioQuality) {
+      qualitySelect.value = state.settings.audioQuality;
+    }
+
+    // Field errors: Concurrency
+    if (state.fieldErrors.maxConcurrency) {
+      concurrencyError?.classList.remove('hidden');
+      if (concurrencyErrorText)
+        concurrencyErrorText.textContent = state.fieldErrors.maxConcurrency;
+      concurrencyInput?.classList.add('border-red-500', 'focus:ring-red-500');
+    } else {
+      concurrencyError?.classList.add('hidden');
+      concurrencyInput?.classList.remove(
+        'border-red-500',
+        'focus:ring-red-500'
+      );
+    }
+
+    // Field errors: Audio Quality
+    if (state.fieldErrors.audioQuality) {
+      qualityError?.classList.remove('hidden');
+      if (qualityErrorText)
+        qualityErrorText.textContent = state.fieldErrors.audioQuality;
+      qualitySelect?.classList.add('border-red-500', 'focus:ring-red-500');
+    } else {
+      qualityError?.classList.add('hidden');
+      qualitySelect?.classList.remove('border-red-500', 'focus:ring-red-500');
+    }
+
+    // Success alert
+    if (state.successMessage) {
+      successWrapper?.classList.remove('hidden');
+      if (successText) successText.textContent = state.successMessage;
+    } else {
+      successWrapper?.classList.add('hidden');
+    }
+
+    // Global error alert
+    if (
+      state.error &&
+      !state.fieldErrors.maxConcurrency &&
+      !state.fieldErrors.audioQuality
+    ) {
+      errorWrapper?.classList.remove('hidden');
+      if (errorText) errorText.textContent = state.error;
+    } else {
+      errorWrapper?.classList.add('hidden');
+    }
+
+    // Loading toggle
+    if (state.loading) {
+      loadingState?.classList.remove('hidden');
+      form?.classList.add('hidden');
+    } else {
+      loadingState?.classList.add('hidden');
+      form?.classList.remove('hidden');
+    }
+
+    // Saving buttons state
+    if (saveBtn) {
+      const canSave = state.isDirty && !state.saving;
+      saveBtn.disabled = !canSave;
+
+      if (state.saving) {
+        saveBtnSpinner?.classList.remove('hidden');
+        if (saveBtnText) saveBtnText.textContent = 'Guardando...';
+      } else {
+        saveBtnSpinner?.classList.add('hidden');
+        if (saveBtnText) saveBtnText.textContent = 'Guardar ajustes';
+      }
+    }
+
+    if (resetBtn) {
+      resetBtn.disabled = !state.isDirty || state.saving;
+    }
+
+    // Sync status badge
+    if (syncBadge && syncText) {
+      if (state.isDirty) {
+        syncBadge.className =
+          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-amber-950/60 text-amber-300 border-amber-800/80 select-none transition-colors';
+        syncText.textContent = 'Cambios sin guardar';
+      } else {
+        syncBadge.className =
+          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-800 text-slate-300 border-slate-700 select-none transition-colors';
+        syncText.textContent = 'Sincronizado';
+      }
+    }
+  }
+
+  // Subscribe to store updates
+  settingsStore.addEventListener('stateChange', ((
+    e: CustomEvent<SettingsState>
+  ) => {
+    updateUi(e.detail);
+  }) as EventListener);
+
+  // Concurrency input listener
+  concurrencyInput?.addEventListener('input', (e) => {
+    const val = Number((e.target as HTMLInputElement).value);
+    settingsStore.updateField('maxConcurrency', val);
+  });
+
+  // Concurrency slider listener
+  concurrencySlider?.addEventListener('input', (e) => {
+    const val = Number((e.target as HTMLInputElement).value);
+    settingsStore.updateField('maxConcurrency', val);
+  });
+
+  // Audio quality select listener
+  qualitySelect?.addEventListener('change', (e) => {
+    const val = (e.target as HTMLSelectElement).value;
+    settingsStore.updateField('audioQuality', val);
+  });
+
+  // Reset button listener
+  resetBtn?.addEventListener('click', () => {
+    settingsStore.resetToInitial();
+  });
+
+  // Form submit listener
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await settingsStore.saveSettings();
+  });
+
+  // Warn on navigation if dirty
+  window.addEventListener('beforeunload', (e) => {
+    if (settingsStore.getState().isDirty) {
+      e.preventDefault();
+    }
+  });
+
+  // Initial load from authoritative backend
+  settingsStore.loadSettings();
+</script>

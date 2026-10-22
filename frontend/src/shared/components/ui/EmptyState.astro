@@ -1,0 +1,44 @@
+---
+interface Props {
+  icon?: string;
+  title: string;
+  description?: string;
+  class?: string;
+}
+
+const { icon = '📭', title, description, class: className = '' } = Astro.props;
+---
+
+<div
+  class:list={[
+    'flex flex-col items-center justify-center p-8 text-center rounded-xl border border-slate-800 bg-slate-900/40',
+    className,
+  ]}
+>
+  <div
+    class="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800/80 text-2xl select-none mb-4 border border-slate-700/50 shadow-inner"
+    aria-hidden="true"
+  >
+    {icon}
+  </div>
+
+  <h3 class="text-base font-semibold text-slate-100 tracking-wide">
+    {title}
+  </h3>
+
+  {
+    description && (
+      <p class="mt-1.5 text-xs text-slate-400 max-w-sm leading-relaxed">
+        {description}
+      </p>
+    )
+  }
+
+  {
+    Astro.slots.has('default') && (
+      <div class="mt-5 flex items-center justify-center gap-3">
+        <slot />
+      </div>
+    )
+  }
+</div>

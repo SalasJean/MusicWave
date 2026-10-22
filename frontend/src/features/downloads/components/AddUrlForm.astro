@@ -1,0 +1,111 @@
+---
+import Button from '@/shared/components/ui/Button.astro';
+import Input from '@/shared/components/ui/Input.astro';
+---
+
+<div
+  class="rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 shadow-sm space-y-3"
+>
+  <form id="single-add-form" class="flex flex-col sm:flex-row items-end gap-3">
+    <div class="flex-1 w-full">
+      <Input
+        id="single-url-input"
+        name="url"
+        type="url"
+        label="Agregar enlace de audio / video"
+        placeholder="https://www.youtube.com/watch?v=..."
+        required
+      />
+    </div>
+
+    <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
+      <Button
+        type="submit"
+        id="single-submit-btn"
+        variant="primary"
+        size="md"
+        class="w-full sm:w-auto"
+      >
+        <span aria-hidden="true">➕</span>
+        <span>Agregar</span>
+      </Button>
+
+      <Button
+        type="button"
+        variant="secondary"
+        size="md"
+        class="whitespace-nowrap"
+        onclick="document.getElementById('bulk-ingest-modal')?.showModal()"
+      >
+        <span>📋 Lote</span>
+      </Button>
+
+      <Button
+        type="button"
+        variant="secondary"
+        size="md"
+        class="whitespace-nowrap"
+        onclick="document.getElementById('import-txt-modal')?.showModal()"
+      >
+        <span>📄 TXT</span>
+      </Button>
+    </div>
+  </form>
+
+  <!-- Mensajes de feedback inline -->
+  <div id="single-add-feedback" class="hidden text-xs py-1"></div>
+</div>
+
+<script>
+  import { downloadStore } from '../stores/downloadStore';
+  import { ApiProblemError } from '@/shared/api/problemDetails';
+
+  const form = document.getElementById(
+    'single-add-form'
+  ) as HTMLFormElement | null;
+  const input = document.getElementById(
+    'single-url-input'
+  ) as HTMLInputElement | null;
+  const submitBtn = document.getElementById(
+    'single-submit-btn'
+  ) as HTMLButtonElement | null;
+  const feedback = document.getElementById('single-add-feedback');
+
+  if (form && input && submitBtn && feedback) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = input.value.trim();
+      if (!url) return;
+
+      submitBtn.setAttribute('disabled', 'true');
+      submitBtn.setAttribute('aria-busy', 'true');
+      feedback.className = 'hidden';
+      feedback.textContent = '';
+
+      try {
+        await downloadStore.addSingle(url);
+        input.value = '';
+        feedback.className =
+          'text-xs text-emerald-400 flex items-center gap-1 font-medium';
+        feedback.innerHTML =
+          '<span aria-hidden="true">✅</span><span>Descarga agregada a la bandeja de pendientes.</span>';
+
+        setTimeout(() => {
+          feedback.className = 'hidden';
+          feedback.textContent = '';
+        }, 4000);
+      } catch (err: unknown) {
+        let msg = 'Error al agregar la URL.';
+        if (err instanceof ApiProblemError) {
+          msg = err.problem.detail || err.problem.title;
+        }
+        feedback.className =
+          'text-xs text-red-400 flex items-center gap-1 font-medium';
+        feedback.innerHTML = `<span aria-hidden="true">⚠️</span><span>${msg}</span>`;
+      } finally {
+        submitBtn.removeAttribute('disabled');
+        submitBtn.removeAttribute('aria-busy');
+      }
+    });
+  }
+</script>

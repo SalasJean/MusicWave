@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.salas.musicwave.qa'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+dependencies {
+    testImplementation 'io.karatelabs:karate-junit5:1.5.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
+    testImplementation 'org.seleniumhq.selenium:selenium-java:4.51.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.4'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    systemProperty 'apiBaseUrl', System.getProperty(
+            'apiBaseUrl', System.getenv().getOrDefault('API_BASE_URL', 'http://localhost:8080'))
+    systemProperty 'uiBaseUrl', System.getProperty(
+            'uiBaseUrl', System.getenv().getOrDefault('UI_BASE_URL', 'http://localhost:4321'))
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
+
+tasks.register('apiTest', Test) {
+    description = 'Runs black-box REST API tests with Karate.'
+    group = 'verification'
+    include '**/MusicWaveApiTest.class'
+}
+
+tasks.register('uiTest', Test) {
+    description = 'Runs browser smoke tests with Selenium.'
+    group = 'verification'
+    include '**/MusicWaveUiTest.class'
+}

@@ -1,0 +1,493 @@
+---
+import EmptyState from '@/shared/components/ui/EmptyState.astro';
+import IconButton from '@/shared/components/ui/IconButton.astro';
+import Skeleton from '@/shared/components/ui/Skeleton.astro';
+import Pagination from './Pagination.astro';
+---
+
+<div class="space-y-4" id="download-list-container">
+  <!-- Cabecera de la lista -->
+  <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+    <div class="flex items-center gap-2.5">
+      <h2 class="text-lg font-semibold text-white tracking-wide">
+        Cola de Descargas
+      </h2>
+      <span
+        id="queue-items-badge"
+        class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono"
+      >
+        0
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <IconButton
+        id="refresh-downloads-btn"
+        label="Actualizar bandeja"
+        variant="secondary"
+        size="sm"
+      >
+        <span aria-hidden="true">🔄</span>
+      </IconButton>
+    </div>
+  </div>
+
+  <!-- Tip informativo sobre permisos del navegador para descargas múltiples -->
+  <div
+    id="browser-permission-hint"
+    class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs text-slate-400 flex items-center justify-between gap-2"
+  >
+    <div class="flex items-center gap-2">
+      <span aria-hidden="true">💡</span>
+      <span>
+        <strong>Tip de descargas automáticas:</strong> Si procesas múltiples canciones
+        a la vez, permite el permiso de <em>"Descargar múltiples archivos"</em> en
+        tu navegador para que los MP3 se guarden automáticamente sin bloqueos.
+      </span>
+    </div>
+    <button
+      type="button"
+      id="dismiss-permission-hint-btn"
+      class="text-slate-500 hover:text-slate-300 text-xs px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+      title="Ocultar aviso"
+      aria-label="Ocultar aviso de permisos"
+    >
+      ✕
+    </button>
+  </div>
+
+  <!-- Estado de carga esqueleto -->
+  <div id="downloads-loading" class="hidden space-y-3 py-2">
+    <Skeleton variant="rectangular" height="96px" class="rounded-xl" />
+    <Skeleton variant="rectangular" height="96px" class="rounded-xl" />
+    <Skeleton variant="rectangular" height="96px" class="rounded-xl" />
+  </div>
+
+  <!-- Estado de error recuperable -->
+  <div
+    id="downloads-error"
+    class="hidden p-4 rounded-xl border border-red-800 bg-red-950/60 text-sm text-red-200 space-y-3"
+  >
+    <div class="flex items-center gap-2">
+      <span aria-hidden="true">❌</span>
+      <span id="downloads-error-message" class="font-medium"
+        >Error al cargar las descargas.</span
+      >
+    </div>
+    <button
+      type="button"
+      id="retry-fetch-btn"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-red-800 hover:bg-red-700 text-white cursor-pointer transition-colors"
+    >
+      Reintentar lectura
+    </button>
+  </div>
+
+  <!-- Contenedor dinámico de tarjetas de descarga -->
+  <div id="downloads-cards-grid" class="space-y-3">
+    <!-- Se inyecta dinámicamente mediante el store -->
+  </div>
+
+  <!-- Estado vacío -->
+  <div id="downloads-empty" class="hidden">
+    <EmptyState
+      icon="📥"
+      title="Bandeja de descargas vacía"
+      description="Pegue una URL arriba o cargue un archivo TXT para comenzar a procesar audio."
+    />
+  </div>
+
+  <!-- Controles de paginación -->
+  <div id="pagination-wrapper" class="pt-2">
+    <Pagination page={0} totalPages={1} totalElements={0} />
+  </div>
+</div>
+
+<script>
+  import {
+    downloadStore,
+    type DownloadStoreState,
+  } from '../stores/downloadStore';
+  import type { DownloadJobViewModel } from '../model/downloadMappers';
+
+  const container = document.getElementById('download-list-container');
+  const cardsGrid = document.getElementById('downloads-cards-grid');
+  const emptyState = document.getElementById('downloads-empty');
+  const loadingState = document.getElementById('downloads-loading');
+  const errorState = document.getElementById('downloads-error');
+  const errorMessage = document.getElementById('downloads-error-message');
+  const itemsBadge = document.getElementById('queue-items-badge');
+  const refreshBtn = document.getElementById('refresh-downloads-btn');
+  const retryBtn = document.getElementById('retry-fetch-btn');
+
+  function renderJobCard(job: DownloadJobViewModel): string {
+    const isExecuting =
+      job.status === 'DOWNLOADING' || job.status === 'CONVERTING';
+    const hasProgress = isExecuting || job.status === 'COMPLETED';
+
+    const progressBarHtml = hasProgress
+      ? `
+        <div class="w-full space-y-1.5 pt-1">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-medium select-none">
+            <div class="flex items-center gap-2">
+              ${job.speed ? `<span class="inline-flex items-center gap-1 text-slate-300">⚡ ${job.speed}</span>` : ''}
+              ${job.eta ? `<span class="inline-flex items-center gap-1 text-slate-400">⏱️ ETA: ${job.eta}</span>` : ''}
+            </div>
+            <span class="tabular-nums font-semibold text-slate-200">${job.progress}%</span>
+          </div>
+          <div role="progressbar" aria-valuenow="${job.progress}" aria-valuemin="0" aria-valuemax="100" class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-300 ${
+              job.status === 'COMPLETED'
+                ? 'bg-green-500'
+                : job.status === 'CONVERTING'
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500'
+            }" style="width: ${job.progress}%"></div>
+          </div>
+        </div>
+      `
+      : '';
+
+    const errorHtml =
+      job.status === 'FAILED'
+        ? `
+        <div role="alert" class="p-3 rounded-lg bg-red-950/60 border border-red-800 text-xs text-red-200 flex items-start gap-2">
+          <span>⚠️</span>
+          <div>
+            <p class="font-medium text-red-100">${job.errorMessage || 'Error en la descarga.'}</p>
+            ${job.errorCode ? `<p class="font-mono text-[10px] text-red-400 mt-0.5">Código: ${job.errorCode}</p>` : ''}
+          </div>
+        </div>
+      `
+        : '';
+
+    return `
+      <article id="download-job-${job.id}" data-job-id="${job.id}" class="rounded-xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5 transition-all hover:border-slate-700/80 shadow-sm space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-semibold text-white tracking-wide truncate" title="${job.displayTitle}">
+                ${job.displayTitle}
+              </h3>
+              ${
+                job.isTitleFallback
+                  ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">URL</span>`
+                  : ''
+              }
+            </div>
+            <a href="${job.sourceUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-slate-400 hover:text-blue-400 transition-colors truncate block mt-0.5 max-w-xl">
+              🔗 ${job.sourceUrl}
+            </a>
+          </div>
+          <span class="inline-flex items-center rounded-full text-xs px-2.5 py-1 font-medium gap-1.5 select-none ${
+            job.status === 'COMPLETED'
+              ? 'bg-green-950/80 text-green-400 border border-green-800'
+              : job.status === 'FAILED'
+                ? 'bg-red-950/80 text-red-400 border border-red-800'
+                : job.status === 'DOWNLOADING'
+                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800'
+                  : job.status === 'CONVERTING'
+                    ? 'bg-amber-950/80 text-amber-400 border border-amber-800'
+                    : job.status === 'QUEUED'
+                      ? 'bg-sky-950/80 text-sky-400 border border-sky-800'
+                      : job.status === 'CANCELLED'
+                        ? 'bg-slate-900 text-slate-500 border border-slate-800 line-through'
+                        : 'bg-slate-800 text-slate-300 border border-slate-700'
+          }">
+            ${job.statusConfig.isActive ? '<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>' : ''}
+            ${job.statusConfig.label}
+          </span>
+        </div>
+
+        ${progressBarHtml}
+        ${errorHtml}
+
+        ${
+          job.canCancel ||
+          job.canRetry ||
+          job.cancellationRequested ||
+          job.status === 'COMPLETED'
+            ? `
+          <div class="flex items-center justify-end gap-2 pt-1">
+            ${
+              job.cancellationRequested
+                ? `
+              <span class="inline-flex items-center gap-1.5 text-xs text-amber-400 font-medium px-2 py-1 rounded bg-amber-950/40 border border-amber-900/50">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                Cancelación solicitada...
+              </span>
+            `
+                : ''
+            }
+            ${
+              job.canCancel && !job.cancellationRequested
+                ? `
+              <button
+                type="button"
+                data-action="cancel-job"
+                data-job-id="${job.id}"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-red-300 hover:bg-red-950/40 border border-slate-700/80 hover:border-red-900/60 transition-colors cursor-pointer"
+                title="Cancelar esta descarga"
+              >
+                <span aria-hidden="true">✕</span>
+                <span>Cancelar</span>
+              </button>
+            `
+                : ''
+            }
+            ${
+              job.canRetry
+                ? `
+              <button
+                type="button"
+                data-action="retry-job"
+                data-job-id="${job.id}"
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/80 shadow-sm transition-colors cursor-pointer"
+                title="Reintentar esta descarga fallida"
+              >
+                <span aria-hidden="true">🔄</span>
+                <span>Reintentar</span>
+              </button>
+            `
+                : ''
+            }
+            ${
+              job.status === 'COMPLETED'
+                ? `
+              <div class="inline-flex items-center gap-2">
+                ${
+                  job.artifactStatus === 'delivering'
+                    ? `
+                  <button
+                    type="button"
+                    disabled
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800 opacity-80 cursor-not-allowed"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Descargando MP3...</span>
+                  </button>
+                `
+                    : ''
+                }
+                ${
+                  job.artifactStatus === 'downloaded'
+                    ? `
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-950/40 text-green-400 border border-green-900/50">
+                    <span aria-hidden="true">✓</span>
+                    <span>Descargado (un solo uso)</span>
+                  </span>
+                `
+                    : ''
+                }
+                ${
+                  job.artifactStatus === 'expired'
+                    ? `
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                    <span aria-hidden="true">⏱️</span>
+                    <span>Artefacto expirado</span>
+                  </span>
+                `
+                    : ''
+                }
+                ${
+                  job.artifactStatus === 'missing'
+                    ? `
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-950/30 text-red-400 border border-red-900/40">
+                    <span aria-hidden="true">⚠️</span>
+                    <span>No disponible</span>
+                  </span>
+                `
+                    : ''
+                }
+                ${
+                  job.canDownloadArtifact && job.artifactStatus !== 'delivering'
+                    ? `
+                  <button
+                    type="button"
+                    data-action="download-artifact"
+                    data-job-id="${job.id}"
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors cursor-pointer"
+                    title="Descargar archivo MP3 (un solo uso según ADR-0006)"
+                  >
+                    <span aria-hidden="true">🎵</span>
+                    <span>Descargar MP3</span>
+                  </button>
+                `
+                    : ''
+                }
+              </div>
+            `
+                : ''
+            }
+          </div>
+        `
+            : ''
+        }
+
+        <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
+          <div class="flex items-center gap-3">
+            <span>Creado: <time>${job.createdAtFormatted}</time></span>
+            ${job.retryCount > 0 ? `<span class="text-amber-400 font-medium">Reintentos: ${job.retryCount}</span>` : ''}
+          </div>
+          <span class="font-mono text-slate-600">ID: ${job.id.slice(0, 8)}...</span>
+        </div>
+      </article>
+    `;
+  }
+
+  function updateUi(state: DownloadStoreState) {
+    if (!container || !cardsGrid || !emptyState || !loadingState || !errorState)
+      return;
+
+    if (itemsBadge) {
+      itemsBadge.textContent = String(state.totalElements);
+    }
+
+    // Toggle loading
+    if (state.loading && state.items.length === 0) {
+      loadingState.classList.remove('hidden');
+      cardsGrid.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      errorState.classList.add('hidden');
+      return;
+    } else {
+      loadingState.classList.add('hidden');
+    }
+
+    // Toggle error
+    if (state.error && state.items.length === 0) {
+      errorState.classList.remove('hidden');
+      if (errorMessage) errorMessage.textContent = state.error;
+      cardsGrid.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      return;
+    } else {
+      errorState.classList.add('hidden');
+    }
+
+    // Render items or empty
+    if (state.items.length === 0) {
+      cardsGrid.innerHTML = '';
+      cardsGrid.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+    } else {
+      emptyState.classList.add('hidden');
+      cardsGrid.classList.remove('hidden');
+      cardsGrid.innerHTML = state.items.map(renderJobCard).join('');
+    }
+
+    // Update pagination controls
+    updatePagination(state);
+  }
+
+  function updatePagination(state: DownloadStoreState) {
+    const prevBtn = document.getElementById(
+      'pagination-prev-btn'
+    ) as HTMLButtonElement | null;
+    const nextBtn = document.getElementById(
+      'pagination-next-btn'
+    ) as HTMLButtonElement | null;
+    const nav = document.querySelector(
+      'nav[aria-label="Paginación de descargas"]'
+    );
+
+    if (prevBtn) {
+      if (state.page > 0) {
+        prevBtn.removeAttribute('disabled');
+        prevBtn.setAttribute('data-target-page', String(state.page - 1));
+      } else {
+        prevBtn.setAttribute('disabled', 'true');
+      }
+    }
+
+    if (nextBtn) {
+      if (state.page < state.totalPages - 1) {
+        nextBtn.removeAttribute('disabled');
+        nextBtn.setAttribute('data-target-page', String(state.page + 1));
+      } else {
+        nextBtn.setAttribute('disabled', 'true');
+      }
+    }
+
+    if (nav) {
+      const infoSpan = nav.querySelector('div span.font-semibold');
+      const totalSpan = nav.querySelector('div span:last-child');
+      if (infoSpan) {
+        infoSpan.textContent = `Página ${state.page + 1} de ${Math.max(state.totalPages, 1)}`;
+      }
+      if (totalSpan) {
+        totalSpan.textContent = `(${state.totalElements} descargas en total)`;
+      }
+    }
+  }
+
+  // Subscribe to store
+  downloadStore.addEventListener('stateChange', ((
+    e: CustomEvent<DownloadStoreState>
+  ) => {
+    updateUi(e.detail);
+  }) as EventListener);
+
+  // Pagination click handlers
+  document.addEventListener('click', (e) => {
+    const target = (e.target as HTMLElement).closest(
+      '#pagination-prev-btn, #pagination-next-btn'
+    );
+    if (!target) return;
+    const targetPage = target.getAttribute('data-target-page');
+    if (targetPage !== null) {
+      downloadStore.loadPage(Number(targetPage));
+    }
+  });
+
+  // Action listeners
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => downloadStore.loadPage());
+  }
+
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => downloadStore.loadPage());
+  }
+
+  // Delegated click handlers for individual job actions (cancel, retry & download artifact)
+  cardsGrid?.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest(
+      'button[data-action]'
+    ) as HTMLButtonElement | null;
+    if (!btn || btn.disabled) return;
+
+    const action = btn.getAttribute('data-action');
+    const jobId = btn.getAttribute('data-job-id');
+    if (!jobId) return;
+
+    // Anti double-click guard
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+
+    try {
+      if (action === 'cancel-job') {
+        btn.innerHTML = '<span class="animate-pulse">Cancelando...</span>';
+        await downloadStore.cancelDownload(jobId);
+      } else if (action === 'retry-job') {
+        btn.innerHTML = '<span class="animate-pulse">Reintentando...</span>';
+        await downloadStore.retryDownload(jobId);
+      } else if (action === 'download-artifact') {
+        btn.innerHTML = '<span class="animate-pulse">Descargando...</span>';
+        await downloadStore.downloadArtifact(jobId, { isAutomatic: false });
+      }
+    } catch {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  });
+
+  // Listener para descartar el hint informativo de permisos
+  const dismissHintBtn = document.getElementById('dismiss-permission-hint-btn');
+  const hintBanner = document.getElementById('browser-permission-hint');
+  dismissHintBtn?.addEventListener('click', () => {
+    hintBanner?.classList.add('hidden');
+  });
+
+  // Initial load on mount
+  downloadStore.loadPage(0);
+</script>

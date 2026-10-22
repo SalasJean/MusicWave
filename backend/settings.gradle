@@ -1,0 +1,14 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'musicwave-backend'
+
+include 'apps:api'
+include 'apps:worker'
+include 'libs:domain'
+include 'libs:application'
+include 'libs:infrastructure'

@@ -1,0 +1,39 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Java and Gradle
+.gradle/
+**/build/
+out/
+*.class
+
+# Node and Astro
+**/node_modules/
+**/dist/
+**/.astro/
+**/coverage/
+
+# IDE and operating system
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Runtime data and generated media
+data/
+*.log
+*.mp3
+*.part
+*.ytdl
+
+# Local test evidence
+qa/test-results/
+qa/screenshots/

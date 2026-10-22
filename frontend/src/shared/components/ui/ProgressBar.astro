@@ -1,0 +1,84 @@
+---
+interface Props {
+  value?: number | null;
+  max?: number;
+  label?: string;
+  showValue?: boolean;
+  status?: 'default' | 'downloading' | 'converting' | 'completed' | 'failed';
+  speed?: string | null;
+  eta?: string | null;
+  class?: string;
+}
+
+const {
+  value = 0,
+  max = 100,
+  label,
+  showValue = true,
+  status = 'downloading',
+  speed,
+  eta,
+  class: className = '',
+} = Astro.props;
+
+const clampedValue = Math.min(Math.max(Number(value) || 0, 0), max);
+const percentage = Math.round((clampedValue / max) * 100);
+
+const barColorClasses = {
+  default: 'bg-blue-500',
+  downloading: 'bg-emerald-500',
+  converting: 'bg-amber-500',
+  completed: 'bg-green-500',
+  failed: 'bg-red-500',
+}[status];
+
+const valueText = `${percentage}%`;
+---
+
+<div class:list={['w-full space-y-1.5', className]}>
+  {
+    (label || showValue || speed || eta) && (
+      <div class="flex items-center justify-between text-xs text-slate-400 font-medium select-none">
+        <div class="flex items-center gap-2">
+          {label && <span class="text-slate-200">{label}</span>}
+          {speed && (
+            <span class="inline-flex items-center gap-1 text-slate-300">
+              <span aria-hidden="true">⚡</span>
+              <span>{speed}</span>
+            </span>
+          )}
+          {eta && (
+            <span class="inline-flex items-center gap-1 text-slate-400">
+              <span aria-hidden="true">⏱️</span>
+              <span>ETA: {eta}</span>
+            </span>
+          )}
+        </div>
+
+        {showValue && (
+          <span class="tabular-nums font-semibold text-slate-200">
+            {valueText}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  <div
+    role="progressbar"
+    aria-valuenow={clampedValue}
+    aria-valuemin={0}
+    aria-valuemax={max}
+    aria-valuetext={`${valueText} ${status}`}
+    class="w-full h-2.5 rounded-full bg-slate-800 border border-slate-700/60 overflow-hidden relative shadow-inner"
+  >
+    <div
+      class:list={[
+        'h-full transition-all duration-300 ease-out rounded-full',
+        barColorClasses,
+      ]}
+      style={`width: ${percentage}%`}
+    >
+    </div>
+  </div>
+</div>

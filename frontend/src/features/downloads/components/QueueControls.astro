@@ -1,0 +1,486 @@
+---
+import Button from '@/shared/components/ui/Button.astro';
+import Modal from '@/shared/components/ui/Modal.astro';
+import Alert from '@/shared/components/ui/Alert.astro';
+---
+
+<section
+  id="queue-controls-container"
+  aria-label="Controles y operaciones de la cola de descargas"
+  class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm space-y-4"
+>
+  <!-- Barra superior: Estadísticas rápidas y acciones principales -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <!-- Indicadores de estado de la cola -->
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-slate-400 font-medium">Bandeja:</span>
+
+      <span
+        id="badge-stat-total"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-mono"
+        title="Total de descargas registradas"
+      >
+        <span>Total:</span>
+        <strong id="stat-total-count" class="text-white">0</strong>
+      </span>
+
+      <span
+        id="badge-stat-pending"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 text-amber-300 border border-amber-900/50 font-mono"
+        title="Descargas pendientes por iniciar"
+      >
+        <span>⏳ Pendientes:</span>
+        <strong id="stat-pending-count" class="text-amber-200">0</strong>
+      </span>
+
+      <span
+        id="badge-stat-active"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 text-emerald-300 border border-emerald-900/50 font-mono"
+        title="Descargas en curso o encoladas"
+      >
+        <span>⚡ En curso:</span>
+        <strong id="stat-active-count" class="text-emerald-200">0</strong>
+      </span>
+
+      <span
+        id="badge-stat-failed"
+        class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-950/50 text-red-300 border border-red-900/60 font-mono"
+        title="Descargas fallidas que admiten reintento"
+      >
+        <span>❌ Fallidas:</span>
+        <strong id="stat-failed-count" class="text-red-200">0</strong>
+      </span>
+
+      <span
+        id="badge-stat-completed"
+        class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-green-950/50 text-green-300 border border-green-900/60 font-mono"
+        title="Descargas completadas listas para archivo"
+      >
+        <span>✅ Completadas:</span>
+        <strong id="stat-completed-count" class="text-green-200">0</strong>
+      </span>
+
+      <!-- Indicador de conexión SSE en tiempo real -->
+      <div
+        id="sse-status-badge"
+        role="status"
+        aria-live="polite"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border select-none transition-colors bg-slate-900 border-slate-800 text-slate-400"
+        title="Estado del stream en tiempo real (/api/v1/events)"
+      >
+        <span id="sse-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"
+        ></span>
+        <span id="sse-status-label">Conectando...</span>
+      </div>
+    </div>
+
+    <!-- Botonera de acciones masivas -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Iniciar cola -->
+      <Button
+        id="start-queue-btn"
+        variant="primary"
+        size="sm"
+        aria-label="Iniciar procesamiento de todas las descargas pendientes"
+        disabled
+      >
+        <span aria-hidden="true" class="text-sm">▶️</span>
+        <span>Iniciar cola</span>
+      </Button>
+
+      <!-- Cancelar cola -->
+      <Button
+        id="cancel-queue-btn"
+        variant="secondary"
+        size="sm"
+        aria-label="Cancelar todas las descargas en cola o ejecución"
+        disabled
+      >
+        <span aria-hidden="true" class="text-sm">⏹️</span>
+        <span>Cancelar cola</span>
+      </Button>
+
+      <!-- Limpiar completados (abre modal) -->
+      <Button
+        id="open-clear-completed-modal-btn"
+        variant="ghost"
+        size="sm"
+        aria-label="Limpiar descargas completadas de la bandeja"
+        disabled
+      >
+        <span aria-hidden="true" class="text-sm">🧹</span>
+        <span>Completadas</span>
+      </Button>
+
+      <!-- Vaciar toda la bandeja (abre modal) -->
+      <Button
+        id="open-clear-all-modal-btn"
+        variant="ghost"
+        size="sm"
+        class="text-red-400 hover:text-red-300 hover:bg-red-950/40"
+        aria-label="Vaciar completamente la bandeja de descargas"
+        disabled
+      >
+        <span aria-hidden="true" class="text-sm">🗑️</span>
+        <span>Vaciar</span>
+      </Button>
+    </div>
+  </div>
+
+  <!-- Alerta reactiva de feedback / estado / rate limiting -->
+  <div id="queue-feedback-wrapper" class="hidden">
+    <Alert id="queue-feedback-alert" variant="info" dismissible>
+      <span id="queue-feedback-text"></span>
+    </Alert>
+  </div>
+</section>
+
+<!-- Modal de confirmación: Limpiar completados -->
+<Modal
+  id="clear-completed-modal"
+  title="Limpiar descargas completadas"
+  description="Confirmación para remover descargas finalizadas de la bandeja"
+  maxWidth="md"
+>
+  <div class="space-y-3 text-sm text-slate-300">
+    <p>
+      ¿Desea eliminar de la bandeja las descargas con estado
+      <strong class="text-green-400">Completado</strong>?
+    </p>
+    <div
+      class="p-3 rounded-lg bg-amber-950/40 border border-amber-800/60 text-xs text-amber-200"
+    >
+      <p class="font-semibold text-amber-100 flex items-center gap-1.5">
+        <span>⚠️</span> Aviso de artefactos efímeros (ADR-0006)
+      </p>
+      <p class="mt-1 text-amber-200/90 leading-relaxed">
+        Los archivos MP3 temporales asociados se marcarán para eliminación
+        inmediata en el almacenamiento del servidor.
+      </p>
+    </div>
+  </div>
+
+  <div slot="footer" class="flex items-center justify-end gap-3 w-full">
+    <Button
+      id="cancel-clear-completed-modal-btn"
+      variant="secondary"
+      size="sm"
+      data-close-modal
+    >
+      Cancelar
+    </Button>
+    <Button
+      id="confirm-clear-completed-btn"
+      variant="primary"
+      size="sm"
+      class="bg-amber-600 hover:bg-amber-500 text-white"
+    >
+      Confirmar limpieza
+    </Button>
+  </div>
+</Modal>
+
+<!-- Modal de confirmación: Vaciar toda la bandeja -->
+<Modal
+  id="clear-all-modal"
+  title="¿Vaciar toda la bandeja de descargas?"
+  description="Acción destructiva irreversible sobre la cola"
+  maxWidth="md"
+>
+  <div class="space-y-3 text-sm text-slate-300">
+    <p>
+      Esta acción cancelará inmediatamente todas las descargas activas (en cola,
+      descarga o conversión) y eliminará todos los registros visibles de la
+      bandeja.
+    </p>
+    <div
+      class="p-3 rounded-lg bg-red-950/60 border border-red-800/80 text-xs text-red-200 space-y-1"
+    >
+      <p class="font-semibold text-red-100 flex items-center gap-1.5">
+        <span>🛑</span> Acción destructiva irreversible
+      </p>
+      <p class="text-red-200/90 leading-relaxed">
+        Todos los artefactos en progreso y completados serán descartados del
+        servidor.
+      </p>
+    </div>
+  </div>
+
+  <div slot="footer" class="flex items-center justify-end gap-3 w-full">
+    <Button
+      id="cancel-clear-all-modal-btn"
+      variant="secondary"
+      size="sm"
+      data-close-modal
+    >
+      Cancelar
+    </Button>
+    <Button id="confirm-clear-all-btn" variant="danger" size="sm">
+      Sí, vaciar bandeja
+    </Button>
+  </div>
+</Modal>
+
+<script>
+  import {
+    downloadStore,
+    type DownloadStoreState,
+  } from '../stores/downloadStore';
+  import { sseClient } from '@/shared/api/sseClient';
+
+  // DOM Elements
+  const startBtn = document.getElementById(
+    'start-queue-btn'
+  ) as HTMLButtonElement | null;
+  const cancelBtn = document.getElementById(
+    'cancel-queue-btn'
+  ) as HTMLButtonElement | null;
+  const clearCompletedBtn = document.getElementById(
+    'open-clear-completed-modal-btn'
+  ) as HTMLButtonElement | null;
+  const clearAllBtn = document.getElementById(
+    'open-clear-all-modal-btn'
+  ) as HTMLButtonElement | null;
+
+  // Counts
+  const statTotal = document.getElementById('stat-total-count');
+  const statPending = document.getElementById('stat-pending-count');
+  const statActive = document.getElementById('stat-active-count');
+  const statFailed = document.getElementById('stat-failed-count');
+  const statCompleted = document.getElementById('stat-completed-count');
+  const badgeFailed = document.getElementById('badge-stat-failed');
+  const badgeCompleted = document.getElementById('badge-stat-completed');
+
+  // SSE Indicator Elements
+  const sseBadge = document.getElementById('sse-status-badge');
+  const sseDot = document.getElementById('sse-status-dot');
+  const sseLabel = document.getElementById('sse-status-label');
+
+  // Modals & Confirmation buttons
+  const clearCompletedModal = document.getElementById(
+    'clear-completed-modal'
+  ) as HTMLDialogElement | null;
+  const confirmClearCompletedBtn = document.getElementById(
+    'confirm-clear-completed-btn'
+  ) as HTMLButtonElement | null;
+
+  const clearAllModal = document.getElementById(
+    'clear-all-modal'
+  ) as HTMLDialogElement | null;
+  const confirmClearAllBtn = document.getElementById(
+    'confirm-clear-all-btn'
+  ) as HTMLButtonElement | null;
+
+  // Feedback wrapper
+  const feedbackWrapper = document.getElementById('queue-feedback-wrapper');
+  const feedbackText = document.getElementById('queue-feedback-text');
+  const feedbackAlert = document.getElementById('queue-feedback-alert');
+
+  function updateControls(state: DownloadStoreState) {
+    const isOperating = state.isOperating;
+    const items = state.items;
+
+    const pendingItems = items.filter((i) => i.status === 'PENDING');
+    const activeItems = items.filter(
+      (i) =>
+        i.status === 'PENDING' ||
+        i.status === 'QUEUED' ||
+        i.status === 'DOWNLOADING' ||
+        i.status === 'CONVERTING'
+    );
+    const failedItems = items.filter((i) => i.status === 'FAILED');
+    const completedItems = items.filter((i) => i.status === 'COMPLETED');
+
+    // Update counts
+    if (statTotal) statTotal.textContent = String(state.totalElements);
+    if (statPending) statPending.textContent = String(pendingItems.length);
+    if (statActive) statActive.textContent = String(activeItems.length);
+
+    if (statFailed && badgeFailed) {
+      statFailed.textContent = String(failedItems.length);
+      if (failedItems.length > 0) {
+        badgeFailed.classList.remove('hidden');
+      } else {
+        badgeFailed.classList.add('hidden');
+      }
+    }
+
+    if (statCompleted && badgeCompleted) {
+      statCompleted.textContent = String(completedItems.length);
+      if (completedItems.length > 0) {
+        badgeCompleted.classList.remove('hidden');
+      } else {
+        badgeCompleted.classList.add('hidden');
+      }
+    }
+
+    // Update SSE connection indicator
+    if (sseBadge && sseDot && sseLabel) {
+      sseBadge.className =
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border select-none transition-colors';
+      sseDot.className = 'w-1.5 h-1.5 rounded-full';
+
+      switch (state.sseStatus) {
+        case 'connected':
+          sseBadge.classList.add(
+            'bg-emerald-950/60',
+            'border-emerald-800/80',
+            'text-emerald-300'
+          );
+          sseDot.classList.add(
+            'bg-emerald-400',
+            'shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+          );
+          sseLabel.textContent = 'En vivo';
+          break;
+
+        case 'reconnecting':
+          sseBadge.classList.add(
+            'bg-amber-950/60',
+            'border-amber-800/80',
+            'text-amber-300'
+          );
+          sseDot.classList.add('bg-amber-400', 'animate-pulse');
+          sseLabel.textContent = 'Reconectando...';
+          break;
+
+        case 'connecting':
+          sseBadge.classList.add(
+            'bg-sky-950/60',
+            'border-sky-800/80',
+            'text-sky-300'
+          );
+          sseDot.classList.add('bg-sky-400', 'animate-pulse');
+          sseLabel.textContent = 'Conectando...';
+          break;
+
+        case 'disconnected':
+        default:
+          sseBadge.classList.add(
+            'bg-slate-900',
+            'border-slate-800',
+            'text-slate-400'
+          );
+          sseDot.classList.add('bg-slate-500');
+          sseLabel.textContent = 'Desconectado';
+          break;
+      }
+    }
+
+    // Update button states with anti double-click protection
+    if (startBtn) {
+      const canStart = !isOperating && pendingItems.length > 0;
+      startBtn.disabled = !canStart;
+      startBtn.setAttribute('aria-busy', isOperating ? 'true' : 'false');
+    }
+
+    if (cancelBtn) {
+      const canCancel = !isOperating && activeItems.length > 0;
+      cancelBtn.disabled = !canCancel;
+      cancelBtn.setAttribute('aria-busy', isOperating ? 'true' : 'false');
+    }
+
+    if (clearCompletedBtn) {
+      const canClearCompleted = !isOperating && completedItems.length > 0;
+      clearCompletedBtn.disabled = !canClearCompleted;
+    }
+
+    if (clearAllBtn) {
+      const canClearAll = !isOperating && state.totalElements > 0;
+      clearAllBtn.disabled = !canClearAll;
+    }
+
+    // Feedback Alert handling
+    if (feedbackWrapper && feedbackText && feedbackAlert) {
+      if (state.feedback) {
+        feedbackWrapper.classList.remove('hidden');
+        feedbackText.textContent = state.feedback.message;
+      } else if (state.error) {
+        feedbackWrapper.classList.remove('hidden');
+        feedbackText.textContent = state.error;
+      } else {
+        feedbackWrapper.classList.add('hidden');
+        feedbackText.textContent = '';
+      }
+    }
+  }
+
+  // Subscribe to store updates
+  downloadStore.addEventListener('stateChange', ((
+    e: CustomEvent<DownloadStoreState>
+  ) => {
+    updateControls(e.detail);
+  }) as EventListener);
+
+  // Wire sseClient with downloadStore
+  sseClient.onStatusChange((status) => downloadStore.setSseStatus(status));
+  sseClient.onDownload((event) => downloadStore.applyRealtimeUpdate(event));
+  sseClient.onStreamReset((data) => downloadStore.handleStreamReset(data));
+
+  // Connect SSE client on mount
+  sseClient.connect();
+
+  // Disconnect cleanly when navigating or closing tab
+  window.addEventListener('beforeunload', () => sseClient.disconnect());
+
+  // Iniciar cola
+  startBtn?.addEventListener('click', async () => {
+    try {
+      await downloadStore.startQueue();
+    } catch {
+      // Handled via store state
+    }
+  });
+
+  // Cancelar cola
+  cancelBtn?.addEventListener('click', async () => {
+    try {
+      await downloadStore.cancelQueue();
+    } catch {
+      // Handled via store state
+    }
+  });
+
+  // Abrir modal limpiar completados
+  clearCompletedBtn?.addEventListener('click', () => {
+    clearCompletedModal?.showModal();
+  });
+
+  // Confirmar limpiar completados
+  confirmClearCompletedBtn?.addEventListener('click', async () => {
+    clearCompletedModal?.close();
+    try {
+      await downloadStore.clearCompleted();
+    } catch {
+      // Handled via store state
+    }
+  });
+
+  // Abrir modal vaciar bandeja
+  clearAllBtn?.addEventListener('click', () => {
+    clearAllModal?.showModal();
+  });
+
+  // Confirmar vaciar bandeja
+  confirmClearAllBtn?.addEventListener('click', async () => {
+    clearAllModal?.close();
+    try {
+      await downloadStore.clearAll();
+    } catch {
+      // Handled via store state
+    }
+  });
+
+  // Listener para cerrar feedback alert
+  feedbackAlert?.addEventListener('click', (e) => {
+    const target = (e.target as HTMLElement).closest(
+      'button[aria-label="Cerrar alerta"]'
+    );
+    if (target) {
+      downloadStore.clearFeedback();
+    }
+  });
+
+  // Initial synchronization
+  updateControls(downloadStore.getState());
+</script>

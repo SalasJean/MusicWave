@@ -1,0 +1,359 @@
+name: musicwave
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${MUSICWAVE_DB_NAME:-musicwave}
+      POSTGRES_USER: ${MUSICWAVE_DB_USER:-musicwave}
+      POSTGRES_PASSWORD: ${MUSICWAVE_DB_PASSWORD:-musicwave}
+    ports:
+      - "${MUSICWAVE_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    command: ["sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_prometheus && exec rabbitmq-server"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MUSICWAVE_RABBITMQ_USER:-musicwave}
+      RABBITMQ_DEFAULT_PASS: ${MUSICWAVE_RABBITMQ_PASSWORD:-musicwave}
+    ports:
+      - "${MUSICWAVE_RABBITMQ_PORT:-5672}:5672"
+      - "${MUSICWAVE_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${MUSICWAVE_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  object-storage:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    command: ["server", "-s3", "-dir=/data"]
+    ports:
+      - "${MUSICWAVE_S3_PORT:-9000}:8333"
+    volumes:
+      - object-storage-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8333/"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [musicwave]
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: apps/api/Dockerfile
+    environment:
+      MUSICWAVE_DB_URL: jdbc:postgresql://postgres:5432/${MUSICWAVE_DB_NAME:-musicwave}
+      MUSICWAVE_DB_USER: ${MUSICWAVE_DB_USER:-musicwave}
+      MUSICWAVE_DB_PASSWORD: ${MUSICWAVE_DB_PASSWORD:-musicwave}
+      MUSICWAVE_RABBITMQ_HOST: rabbitmq
+      MUSICWAVE_RABBITMQ_USER: ${MUSICWAVE_RABBITMQ_USER:-musicwave}
+      MUSICWAVE_RABBITMQ_PASSWORD: ${MUSICWAVE_RABBITMQ_PASSWORD:-musicwave}
+      MUSICWAVE_REDIS_HOST: redis
+      MUSICWAVE_STORAGE_ENDPOINT: http://object-storage:8333
+      MUSICWAVE_STORAGE_BUCKET: ${MUSICWAVE_STORAGE_BUCKET:-musicwave}
+      MUSICWAVE_STORAGE_BACKEND: s3
+      MUSICWAVE_STORAGE_REGION: ${MUSICWAVE_STORAGE_REGION:-us-east-1}
+      MUSICWAVE_STORAGE_PATH_STYLE: "true"
+      MUSICWAVE_STORAGE_ACCESS_KEY: ${MUSICWAVE_STORAGE_ACCESS_KEY:-}
+      MUSICWAVE_STORAGE_SECRET_KEY: ${MUSICWAVE_STORAGE_SECRET_KEY:-}
+      MUSICWAVE_STORAGE_DELIVERY_LEASE: ${MUSICWAVE_STORAGE_DELIVERY_LEASE:-PT30M}
+      MUSICWAVE_STORAGE_DELETION_LEASE: ${MUSICWAVE_STORAGE_DELETION_LEASE:-PT1M}
+      MUSICWAVE_STORAGE_DELETION_RETRY_DELAY: ${MUSICWAVE_STORAGE_DELETION_RETRY_DELAY:-PT30S}
+      MUSICWAVE_STORAGE_CLEANUP_BATCH_SIZE: ${MUSICWAVE_STORAGE_CLEANUP_BATCH_SIZE:-50}
+      MUSICWAVE_STORAGE_CLEANUP_INITIAL_DELAY: ${MUSICWAVE_STORAGE_CLEANUP_INITIAL_DELAY:-PT10S}
+      MUSICWAVE_STORAGE_CLEANUP_INTERVAL: ${MUSICWAVE_STORAGE_CLEANUP_INTERVAL:-PT30S}
+      MUSICWAVE_SECURITY_MODE: ${MUSICWAVE_SECURITY_MODE:-local}
+      MUSICWAVE_JWT_ISSUER: ${MUSICWAVE_JWT_ISSUER:-}
+      MUSICWAVE_JWT_AUDIENCE: ${MUSICWAVE_JWT_AUDIENCE:-}
+      MUSICWAVE_JWT_JWK_SET_URI: ${MUSICWAVE_JWT_JWK_SET_URI:-}
+      MUSICWAVE_JWT_HMAC_SECRET: ${MUSICWAVE_JWT_HMAC_SECRET:-}
+      MUSICWAVE_MAX_ACTIVE_JOBS_PER_OWNER: ${MUSICWAVE_MAX_ACTIVE_JOBS_PER_OWNER:-1000}
+      MUSICWAVE_RATE_LIMIT_REQUESTS: ${MUSICWAVE_RATE_LIMIT_REQUESTS:-60}
+      MUSICWAVE_RATE_LIMIT_WINDOW: ${MUSICWAVE_RATE_LIMIT_WINDOW:-PT1M}
+      MUSICWAVE_LOCAL_OWNER_ID: ${MUSICWAVE_LOCAL_OWNER_ID:-00000000-0000-0000-0000-000000000001}
+      MUSICWAVE_LOCAL_OWNER_SUBJECT: ${MUSICWAVE_LOCAL_OWNER_SUBJECT:-local-development-user}
+      MUSICWAVE_TITLE_TIMEOUT: ${MUSICWAVE_TITLE_TIMEOUT:-PT3S}
+      MUSICWAVE_TITLE_MAX_ATTEMPTS: ${MUSICWAVE_TITLE_MAX_ATTEMPTS:-3}
+      MUSICWAVE_TITLE_RETRY_BASE_DELAY: ${MUSICWAVE_TITLE_RETRY_BASE_DELAY:-PT10S}
+      MUSICWAVE_TITLE_BATCH_SIZE: ${MUSICWAVE_TITLE_BATCH_SIZE:-10}
+      MUSICWAVE_TOOL_HEARTBEAT_MAX_AGE: ${MUSICWAVE_TOOL_HEARTBEAT_MAX_AGE:-PT30S}
+      MUSICWAVE_RABBITMQ_CONFIRM_TIMEOUT: ${MUSICWAVE_RABBITMQ_CONFIRM_TIMEOUT:-PT5S}
+      MUSICWAVE_OUTBOX_LEASE: ${MUSICWAVE_OUTBOX_LEASE:-PT30S}
+      MUSICWAVE_OUTBOX_BATCH_SIZE: ${MUSICWAVE_OUTBOX_BATCH_SIZE:-50}
+      MUSICWAVE_OUTBOX_INITIAL_DELAY: ${MUSICWAVE_OUTBOX_INITIAL_DELAY:-PT1S}
+      MUSICWAVE_OUTBOX_SCAN_INTERVAL: ${MUSICWAVE_OUTBOX_SCAN_INTERVAL:-PT1S}
+      MUSICWAVE_PUBLISH_RETRY_BASE_DELAY: ${MUSICWAVE_PUBLISH_RETRY_BASE_DELAY:-PT1S}
+      MUSICWAVE_PUBLISH_RETRY_MAX_DELAY: ${MUSICWAVE_PUBLISH_RETRY_MAX_DELAY:-PT1M}
+      MUSICWAVE_REALTIME_STREAM_KEY: ${MUSICWAVE_REALTIME_STREAM_KEY:-musicwave:download-events}
+      MUSICWAVE_REALTIME_MAX_LENGTH: ${MUSICWAVE_REALTIME_MAX_LENGTH:-10000}
+      MUSICWAVE_REALTIME_READ_BATCH_SIZE: ${MUSICWAVE_REALTIME_READ_BATCH_SIZE:-100}
+      MUSICWAVE_REALTIME_READ_BLOCK: ${MUSICWAVE_REALTIME_READ_BLOCK:-PT5S}
+      MUSICWAVE_REALTIME_HEARTBEAT_INTERVAL: ${MUSICWAVE_REALTIME_HEARTBEAT_INTERVAL:-PT15S}
+      MUSICWAVE_REALTIME_CONNECTION_TIMEOUT: ${MUSICWAVE_REALTIME_CONNECTION_TIMEOUT:-PT30M}
+      MUSICWAVE_REALTIME_MAX_CONNECTIONS: ${MUSICWAVE_REALTIME_MAX_CONNECTIONS:-100}
+      MUSICWAVE_ENVIRONMENT: ${MUSICWAVE_ENVIRONMENT:-local}
+      MUSICWAVE_LOG_FORMAT: ${MUSICWAVE_LOG_FORMAT:-ecs}
+      MUSICWAVE_TRACING_ENABLED: ${MUSICWAVE_TRACING_ENABLED:-true}
+      MUSICWAVE_TRACING_SAMPLING_PROBABILITY: ${MUSICWAVE_TRACING_SAMPLING_PROBABILITY:-1.0}
+      MUSICWAVE_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    ports:
+      - "${MUSICWAVE_API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      object-storage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [musicwave]
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      MUSICWAVE_DB_URL: jdbc:postgresql://postgres:5432/${MUSICWAVE_DB_NAME:-musicwave}
+      MUSICWAVE_DB_USER: ${MUSICWAVE_DB_USER:-musicwave}
+      MUSICWAVE_DB_PASSWORD: ${MUSICWAVE_DB_PASSWORD:-musicwave}
+      MUSICWAVE_RABBITMQ_HOST: rabbitmq
+      MUSICWAVE_RABBITMQ_USER: ${MUSICWAVE_RABBITMQ_USER:-musicwave}
+      MUSICWAVE_RABBITMQ_PASSWORD: ${MUSICWAVE_RABBITMQ_PASSWORD:-musicwave}
+      MUSICWAVE_REDIS_HOST: redis
+      MUSICWAVE_STORAGE_ENDPOINT: http://object-storage:8333
+      MUSICWAVE_STORAGE_BUCKET: ${MUSICWAVE_STORAGE_BUCKET:-musicwave}
+      MUSICWAVE_STORAGE_BACKEND: s3
+      MUSICWAVE_STORAGE_REGION: ${MUSICWAVE_STORAGE_REGION:-us-east-1}
+      MUSICWAVE_STORAGE_PATH_STYLE: "true"
+      MUSICWAVE_STORAGE_ACCESS_KEY: ${MUSICWAVE_STORAGE_ACCESS_KEY:-}
+      MUSICWAVE_STORAGE_SECRET_KEY: ${MUSICWAVE_STORAGE_SECRET_KEY:-}
+      MUSICWAVE_STORAGE_ARTIFACT_TTL: ${MUSICWAVE_STORAGE_ARTIFACT_TTL:-PT1H}
+      MUSICWAVE_YT_DLP_COMMAND: ${MUSICWAVE_YT_DLP_COMMAND:-yt-dlp}
+      MUSICWAVE_FFMPEG_COMMAND: ${MUSICWAVE_FFMPEG_COMMAND:-ffmpeg}
+      MUSICWAVE_TOOL_PROBE_TIMEOUT: ${MUSICWAVE_TOOL_PROBE_TIMEOUT:-PT10S}
+      MUSICWAVE_TOOL_HEARTBEAT_INTERVAL: ${MUSICWAVE_TOOL_HEARTBEAT_INTERVAL:-PT10S}
+      MUSICWAVE_RABBITMQ_CONFIRM_TIMEOUT: ${MUSICWAVE_RABBITMQ_CONFIRM_TIMEOUT:-PT5S}
+      MUSICWAVE_OUTBOX_LEASE: ${MUSICWAVE_OUTBOX_LEASE:-PT30S}
+      MUSICWAVE_OUTBOX_BATCH_SIZE: ${MUSICWAVE_OUTBOX_BATCH_SIZE:-50}
+      MUSICWAVE_OUTBOX_INITIAL_DELAY: ${MUSICWAVE_OUTBOX_INITIAL_DELAY:-PT1S}
+      MUSICWAVE_OUTBOX_SCAN_INTERVAL: ${MUSICWAVE_OUTBOX_SCAN_INTERVAL:-PT1S}
+      MUSICWAVE_PUBLISH_RETRY_BASE_DELAY: ${MUSICWAVE_PUBLISH_RETRY_BASE_DELAY:-PT1S}
+      MUSICWAVE_PUBLISH_RETRY_MAX_DELAY: ${MUSICWAVE_PUBLISH_RETRY_MAX_DELAY:-PT1M}
+      MUSICWAVE_REALTIME_STREAM_KEY: ${MUSICWAVE_REALTIME_STREAM_KEY:-musicwave:download-events}
+      MUSICWAVE_REALTIME_MAX_LENGTH: ${MUSICWAVE_REALTIME_MAX_LENGTH:-10000}
+      MUSICWAVE_DISPATCH_MAX_DELIVERIES: ${MUSICWAVE_DISPATCH_MAX_DELIVERIES:-3}
+      MUSICWAVE_DELIVERY_RETRY_BASE_DELAY: ${MUSICWAVE_DELIVERY_RETRY_BASE_DELAY:-PT5S}
+      MUSICWAVE_WORKER_PREFETCH: ${MUSICWAVE_WORKER_PREFETCH:-5}
+      MUSICWAVE_WORKER_CONSUMERS: ${MUSICWAVE_WORKER_CONSUMERS:-1}
+      MUSICWAVE_WORKER_MAX_CONSUMERS: ${MUSICWAVE_WORKER_MAX_CONSUMERS:-1}
+      MUSICWAVE_PROCESS_MAX_CAPTURED_CHARACTERS: ${MUSICWAVE_PROCESS_MAX_CAPTURED_CHARACTERS:-262144}
+      MUSICWAVE_MEDIA_ROOT: /var/lib/musicwave/media
+      MUSICWAVE_AUDIO_QUALITY: ${MUSICWAVE_AUDIO_QUALITY:-192K}
+      MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY: ${MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY:-10}
+      MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY_PER_OWNER: ${MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY_PER_OWNER:-10}
+      MUSICWAVE_DOWNLOAD_JOB_TIMEOUT: ${MUSICWAVE_DOWNLOAD_JOB_TIMEOUT:-PT2H}
+      MUSICWAVE_CANCELLATION_POLL_INTERVAL: ${MUSICWAVE_CANCELLATION_POLL_INTERVAL:-PT0.5S}
+      MUSICWAVE_EXECUTION_LEASE: ${MUSICWAVE_EXECUTION_LEASE:-PT1M}
+      MUSICWAVE_LEASE_RENEW_INTERVAL: ${MUSICWAVE_LEASE_RENEW_INTERVAL:-PT10S}
+      MUSICWAVE_DOWNLOAD_DISPATCH_INITIAL_DELAY: ${MUSICWAVE_DOWNLOAD_DISPATCH_INITIAL_DELAY:-PT2S}
+      MUSICWAVE_DOWNLOAD_DISPATCH_INTERVAL: ${MUSICWAVE_DOWNLOAD_DISPATCH_INTERVAL:-PT1S}
+      MUSICWAVE_ENVIRONMENT: ${MUSICWAVE_ENVIRONMENT:-local}
+      MUSICWAVE_LOG_FORMAT: ${MUSICWAVE_LOG_FORMAT:-ecs}
+      MUSICWAVE_TRACING_ENABLED: ${MUSICWAVE_TRACING_ENABLED:-true}
+      MUSICWAVE_TRACING_SAMPLING_PROBABILITY: ${MUSICWAVE_TRACING_SAMPLING_PROBABILITY:-1.0}
+      MUSICWAVE_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+    volumes:
+      - media-data:/var/lib/musicwave/media
+      - ./yt-dlp.conf:/etc/yt-dlp.conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      object-storage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8081/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [musicwave]
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    ports:
+      - "${MUSICWAVE_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "/bin/promtool", "check", "ready", "--url=http://localhost:9090"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks: [musicwave]
+
+  loki:
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "${MUSICWAVE_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-version"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  tempo:
+    image: grafana/tempo:2.10.8
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "${MUSICWAVE_TEMPO_PORT:-3200}:3200"
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    healthcheck:
+      test: ["CMD", "/tempo", "-version"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    # Docker's json-file logs are root-owned; this local-only reader has a read-only mount.
+    user: "0:0"
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "${MUSICWAVE_OTLP_GRPC_PORT:-4317}:4317"
+      - "${MUSICWAVE_OTLP_HTTP_PORT:-4318}:4318"
+      - "${MUSICWAVE_OTEL_HEALTH_PORT:-13133}:13133"
+    volumes:
+      - ./observability/otel-collector/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [musicwave]
+
+  grafana:
+    image: grafana/grafana:13.2.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${MUSICWAVE_GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${MUSICWAVE_GRAFANA_PASSWORD:-musicwave}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "${MUSICWAVE_GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    networks: [musicwave]
+
+  loadtest:
+    image: grafana/k6:2.3.0
+    profiles: ["load"]
+    environment:
+      BASE_URL: http://api:8080
+    volumes:
+      - ./load:/scripts:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    command: ["run", "/scripts/api-read.js"]
+    networks: [musicwave]
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+  object-storage-data:
+  media-data:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+
+networks:
+  musicwave:
+    driver: bridge

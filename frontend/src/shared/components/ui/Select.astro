@@ -1,0 +1,125 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface SelectOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+interface Props extends HTMLAttributes<'select'> {
+  id: string;
+  name: string;
+  options: SelectOption[];
+  label?: string;
+  value?: string;
+  error?: string;
+  hint?: string;
+  class?: string;
+}
+
+const {
+  id,
+  name,
+  options,
+  label,
+  value,
+  required = false,
+  disabled = false,
+  error,
+  hint,
+  class: className = '',
+  ...rest
+} = Astro.props;
+
+const describedBy = [error ? `${id}-error` : null, hint ? `${id}-hint` : null]
+  .filter(Boolean)
+  .join(' ');
+---
+
+<div class="w-full space-y-1.5">
+  {
+    label && (
+      <label for={id} class="block text-sm font-medium text-slate-200">
+        {label}
+        {required && (
+          <span class="text-red-400 ml-1" aria-hidden="true">
+            *
+          </span>
+        )}
+      </label>
+    )
+  }
+
+  <div class="relative">
+    <select
+      id={id}
+      name={name}
+      required={required}
+      disabled={disabled}
+      aria-invalid={error ? 'true' : undefined}
+      aria-describedby={describedBy || undefined}
+      class:list={[
+        'w-full appearance-none px-3 py-2 pr-9 text-sm rounded-md transition-colors border bg-slate-900/90 text-slate-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-slate-950 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer',
+        error
+          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50'
+          : 'border-slate-700 hover:border-slate-600 focus:border-blue-500 focus:ring-blue-500/50',
+        className,
+      ]}
+      {...rest}
+    >
+      {
+        options.map((opt) => (
+          <option
+            value={opt.value}
+            selected={opt.value === value}
+            disabled={opt.disabled}
+            class="bg-slate-900 text-slate-100"
+          >
+            {opt.label}
+          </option>
+        ))
+      }
+    </select>
+
+    <!-- Chevron Icon -->
+    <div
+      class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400"
+      aria-hidden="true"
+    >
+      <svg
+        class="w-4 h-4"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M19 9l-7 7-7-7"></path>
+      </svg>
+    </div>
+  </div>
+
+  {
+    hint && !error && (
+      <p id={`${id}-hint`} class="text-xs text-slate-400">
+        {hint}
+      </p>
+    )
+  }
+
+  {
+    error && (
+      <p
+        id={`${id}-error`}
+        class="text-xs text-red-400 flex items-center gap-1 font-medium"
+        role="alert"
+      >
+        <span aria-hidden="true">⚠️</span>
+        <span>{error}</span>
+      </p>
+    )
+  }
+</div>

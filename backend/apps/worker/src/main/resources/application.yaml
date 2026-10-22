@@ -1,0 +1,121 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: musicwave-worker
+  datasource:
+    url: ${MUSICWAVE_DB_URL:jdbc:postgresql://localhost:5432/musicwave}
+    username: ${MUSICWAVE_DB_USER:musicwave}
+    password: ${MUSICWAVE_DB_PASSWORD:musicwave}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  rabbitmq:
+    host: ${MUSICWAVE_RABBITMQ_HOST:localhost}
+    port: ${MUSICWAVE_RABBITMQ_PORT:5672}
+    username: ${MUSICWAVE_RABBITMQ_USER:musicwave}
+    password: ${MUSICWAVE_RABBITMQ_PASSWORD:musicwave}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: ${MUSICWAVE_WORKER_PREFETCH:5}
+        concurrency: ${MUSICWAVE_WORKER_CONSUMERS:1}
+        max-concurrency: ${MUSICWAVE_WORKER_MAX_CONSUMERS:1}
+        observation-enabled: true
+    template:
+      observation-enabled: true
+  data:
+    redis:
+      host: ${MUSICWAVE_REDIS_HOST:localhost}
+      port: ${MUSICWAVE_REDIS_PORT:6379}
+
+musicwave:
+  version: 0.1.0-SNAPSHOT
+  worker:
+    id: ${MUSICWAVE_WORKER_ID:${HOSTNAME:local-worker}}
+  tools:
+    yt-dlp-command: ${MUSICWAVE_YT_DLP_COMMAND:yt-dlp}
+    ffmpeg-command: ${MUSICWAVE_FFMPEG_COMMAND:ffmpeg}
+    probe-timeout: ${MUSICWAVE_TOOL_PROBE_TIMEOUT:PT10S}
+    heartbeat-interval: ${MUSICWAVE_TOOL_HEARTBEAT_INTERVAL:PT10S}
+    heartbeat-max-age: ${MUSICWAVE_TOOL_HEARTBEAT_MAX_AGE:PT30S}
+  messaging:
+    confirm-timeout: ${MUSICWAVE_RABBITMQ_CONFIRM_TIMEOUT:PT5S}
+    max-deliveries: ${MUSICWAVE_DISPATCH_MAX_DELIVERIES:3}
+    delivery-retry-base-delay: ${MUSICWAVE_DELIVERY_RETRY_BASE_DELAY:PT5S}
+    outbox-lease: ${MUSICWAVE_OUTBOX_LEASE:PT30S}
+    outbox-batch-size: ${MUSICWAVE_OUTBOX_BATCH_SIZE:50}
+    outbox-initial-delay: ${MUSICWAVE_OUTBOX_INITIAL_DELAY:PT1S}
+    outbox-scan-interval: ${MUSICWAVE_OUTBOX_SCAN_INTERVAL:PT1S}
+    publish-retry-base-delay: ${MUSICWAVE_PUBLISH_RETRY_BASE_DELAY:PT1S}
+    publish-retry-max-delay: ${MUSICWAVE_PUBLISH_RETRY_MAX_DELAY:PT1M}
+  realtime:
+    stream-key: ${MUSICWAVE_REALTIME_STREAM_KEY:musicwave:download-events}
+    max-length: ${MUSICWAVE_REALTIME_MAX_LENGTH:10000}
+  storage:
+    backend: ${MUSICWAVE_STORAGE_BACKEND:s3}
+    endpoint: ${MUSICWAVE_STORAGE_ENDPOINT:http://localhost:9000}
+    bucket: ${MUSICWAVE_STORAGE_BUCKET:musicwave}
+    region: ${MUSICWAVE_STORAGE_REGION:us-east-1}
+    path-style: ${MUSICWAVE_STORAGE_PATH_STYLE:true}
+    access-key: ${MUSICWAVE_STORAGE_ACCESS_KEY:}
+    secret-key: ${MUSICWAVE_STORAGE_SECRET_KEY:}
+    local-root: ${MUSICWAVE_STORAGE_LOCAL_ROOT:/var/lib/musicwave/artifacts}
+    artifact-ttl: ${MUSICWAVE_STORAGE_ARTIFACT_TTL:PT1H}
+  process:
+    max-captured-characters: ${MUSICWAVE_PROCESS_MAX_CAPTURED_CHARACTERS:262144}
+  download:
+    media-root: ${MUSICWAVE_MEDIA_ROOT:/var/lib/musicwave/media}
+    audio-quality: ${MUSICWAVE_AUDIO_QUALITY:192K}
+    max-concurrency: ${MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY:10}
+    max-concurrency-per-owner: ${MUSICWAVE_DOWNLOAD_MAX_CONCURRENCY_PER_OWNER:10}
+    job-timeout: ${MUSICWAVE_DOWNLOAD_JOB_TIMEOUT:PT2H}
+    cancellation-poll-interval: ${MUSICWAVE_CANCELLATION_POLL_INTERVAL:PT0.5S}
+    execution-lease: ${MUSICWAVE_EXECUTION_LEASE:PT1M}
+    lease-renew-interval: ${MUSICWAVE_LEASE_RENEW_INTERVAL:PT10S}
+    dispatch-initial-delay: ${MUSICWAVE_DOWNLOAD_DISPATCH_INITIAL_DELAY:PT2S}
+    dispatch-interval: ${MUSICWAVE_DOWNLOAD_DISPATCH_INTERVAL:PT1S}
+
+management:
+  tracing:
+    sampling:
+      probability: ${MUSICWAVE_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${MUSICWAVE_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+      export:
+        enabled: ${MUSICWAVE_TRACING_ENABLED:false}
+      connect-timeout: ${MUSICWAVE_OTLP_CONNECT_TIMEOUT:1s}
+      timeout: ${MUSICWAVE_OTLP_TIMEOUT:3s}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${MUSICWAVE_ENVIRONMENT:local}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+
+logging:
+  structured:
+    format:
+      console: ${MUSICWAVE_LOG_FORMAT:ecs}
+    ecs:
+      service:
+        environment: ${MUSICWAVE_ENVIRONMENT:local}
+        version: ${musicwave.version}
+    json:
+      stacktrace:
+        max-length: 8192

@@ -1,0 +1,62 @@
+---
+interface Props {
+  id?: string;
+  variant?: 'info' | 'success' | 'warning' | 'error';
+  title?: string;
+  message?: string;
+  class?: string;
+}
+
+const {
+  id,
+  variant = 'info',
+  title,
+  message,
+  class: className = '',
+} = Astro.props;
+
+const borderClasses = {
+  info: 'border-l-4 border-l-blue-500',
+  success: 'border-l-4 border-l-emerald-500',
+  warning: 'border-l-4 border-l-amber-500',
+  error: 'border-l-4 border-l-red-500',
+}[variant];
+
+const iconMap = {
+  info: 'ℹ️',
+  success: '✅',
+  warning: '⚠️',
+  error: '❌',
+};
+---
+
+<div
+  id={id}
+  role="status"
+  aria-live="polite"
+  class:list={[
+    'flex items-start gap-3 p-4 bg-slate-900 border border-slate-700/80 rounded-lg shadow-lg max-w-sm w-full text-sm text-slate-200 transition-all duration-200',
+    borderClasses,
+    className,
+  ]}
+>
+  <div class="text-base shrink-0 select-none" aria-hidden="true">
+    {iconMap[variant]}
+  </div>
+
+  <div class="flex-1 min-w-0">
+    {title && <h4 class="font-semibold text-white truncate">{title}</h4>}
+    <p class="text-slate-300 text-xs mt-0.5 leading-relaxed">
+      {message || <slot />}
+    </p>
+  </div>
+
+  <button
+    type="button"
+    class="text-slate-500 hover:text-white p-1 -mr-1 -mt-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+    aria-label="Cerrar notificación"
+    onclick="this.closest('[role=status]').remove()"
+  >
+    <span aria-hidden="true">&times;</span>
+  </button>
+</div>

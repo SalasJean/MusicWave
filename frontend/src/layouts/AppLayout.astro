@@ -1,0 +1,124 @@
+---
+import '@/styles/global.css';
+import { env } from '@/shared/config/env';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = env.appName,
+  description = 'Descargador y conversor de audio MP3 de alto rendimiento',
+} = Astro.props;
+
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title === env.appName ? title : `${title} | ${env.appName}`}</title>
+  </head>
+  <body
+    class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased"
+  >
+    <!-- Enlace accesible de salto al contenido principal para teclado y lectores de pantalla -->
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white font-medium text-sm"
+    >
+      Saltar al contenido principal
+    </a>
+
+    <!-- Header accesible -->
+    <header
+      class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50"
+    >
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+      >
+        <div class="flex items-center gap-3">
+          <a
+            href="/"
+            class="flex items-center gap-2 text-xl font-bold tracking-tight text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <span aria-hidden="true">🎵</span>
+            <span>{env.appName}</span>
+          </a>
+          <span
+            class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700"
+          >
+            v1.0
+          </span>
+        </div>
+
+        <nav
+          aria-label="Navegación principal"
+          class="flex items-center gap-1 sm:gap-2"
+        >
+          <a
+            href="/"
+            aria-current={currentPath === '/' ? 'page' : undefined}
+            class:list={[
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              currentPath === '/'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800',
+            ]}
+          >
+            Bandeja de Descargas
+          </a>
+          <a
+            href="/settings"
+            aria-current={currentPath === '/settings' ? 'page' : undefined}
+            class:list={[
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              currentPath === '/settings'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800',
+            ]}
+          >
+            Ajustes
+          </a>
+          <a
+            href="/ui-catalog"
+            aria-current={currentPath === '/ui-catalog' ? 'page' : undefined}
+            class:list={[
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              currentPath === '/ui-catalog'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800',
+            ]}
+          >
+            Sistema Visual
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Contenido principal -->
+    <main
+      id="main-content"
+      class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8"
+    >
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer
+      class="border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-500"
+    >
+      <div class="max-w-7xl mx-auto px-4">
+        <p>MusicWave — Migración backend-first a Spring Boot y Astro.</p>
+        <p class="mt-1 text-slate-600">
+          Rutas de backend aisladas bajo proxy relativo /api/v1.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

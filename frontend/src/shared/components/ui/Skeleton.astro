@@ -1,0 +1,39 @@
+---
+interface Props {
+  variant?: 'text' | 'rectangular' | 'circular';
+  width?: string;
+  height?: string;
+  class?: string;
+}
+
+const {
+  variant = 'rectangular',
+  width,
+  height,
+  class: className = '',
+} = Astro.props;
+
+const variantClasses = {
+  text: 'rounded h-4 w-full',
+  rectangular: 'rounded-md',
+  circular: 'rounded-full',
+}[variant];
+
+const style = [
+  width ? `width: ${width}` : null,
+  height ? `height: ${height}` : null,
+]
+  .filter(Boolean)
+  .join('; ');
+---
+
+<div
+  aria-hidden="true"
+  class:list={[
+    'animate-pulse bg-slate-800/80 border border-slate-750 select-none',
+    variantClasses,
+    className,
+  ]}
+  style={style || undefined}
+>
+</div>

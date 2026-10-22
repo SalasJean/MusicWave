@@ -1,0 +1,31 @@
+---
+interface Props {
+  size?: 'sm' | 'md' | 'lg';
+  label?: string;
+  class?: string;
+}
+
+const {
+  size = 'md',
+  label = 'Cargando...',
+  class: className = '',
+} = Astro.props;
+
+const sizeClasses = {
+  sm: 'w-4 h-4 border-2',
+  md: 'w-6 h-6 border-2',
+  lg: 'w-8 h-8 border-3',
+}[size];
+---
+
+<div
+  role="status"
+  class:list={[
+    'inline-block animate-spin rounded-full border-current border-t-transparent text-blue-500',
+    sizeClasses,
+    className,
+  ]}
+  aria-label={label}
+>
+  <span class="sr-only">{label}</span>
+</div>

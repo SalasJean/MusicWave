@@ -1,0 +1,63 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  file_log/docker:
+    include:
+      - /var/lib/docker/containers/*/*.log
+    include_file_path: true
+    start_at: end
+    operators:
+      - id: docker-json
+        type: json_parser
+      - id: docker-body
+        type: move
+        from: attributes.log
+        to: body
+      - id: docker-stream
+        type: move
+        from: attributes.stream
+        to: attributes["log.iostream"]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  resource/logs:
+    attributes:
+      - key: service.name
+        action: upsert
+        value: musicwave-docker
+  batch:
+    timeout: 2s
+    send_batch_size: 1024
+
+exporters:
+  otlp_http/tempo:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/tempo]
+    logs:
+      receivers: [file_log/docker]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [otlp_http/loki]

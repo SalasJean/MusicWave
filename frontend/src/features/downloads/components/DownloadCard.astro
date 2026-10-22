@@ -1,0 +1,239 @@
+---
+import type { DownloadJobViewModel } from '../model/downloadMappers';
+import Badge from '@/shared/components/ui/Badge.astro';
+import ProgressBar from '@/shared/components/ui/ProgressBar.astro';
+
+interface Props {
+  job: DownloadJobViewModel;
+  class?: string;
+}
+
+const { job, class: className = '' } = Astro.props;
+
+const isExecuting = job.status === 'DOWNLOADING' || job.status === 'CONVERTING';
+const hasProgress = isExecuting || job.status === 'COMPLETED';
+---
+
+<article
+  id={`download-job-${job.id}`}
+  data-job-id={job.id}
+  data-status={job.status}
+  aria-labelledby={`job-title-${job.id}`}
+  class:list={[
+    'rounded-xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5 transition-all hover:border-slate-700/80 hover:bg-slate-900 shadow-sm space-y-3.5',
+    job.status === 'FAILED' && 'border-red-900/50 bg-red-950/10',
+    className,
+  ]}
+>
+  <!-- Cabecera de la tarjeta: Título y Badge de Estado -->
+  <div class="flex items-start justify-between gap-3">
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2">
+        <h3
+          id={`job-title-${job.id}`}
+          class="text-base font-semibold text-white tracking-wide truncate"
+          title={job.displayTitle}
+        >
+          {job.displayTitle}
+        </h3>
+        {
+          job.isTitleFallback && (
+            <span
+              class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 shrink-0"
+              title="Título en resolución o fallback de URL"
+            >
+              URL
+            </span>
+          )
+        }
+      </div>
+
+      <!-- Enlace a la URL de origen -->
+      <a
+        href={job.sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-xs text-slate-400 hover:text-blue-400 transition-colors truncate block mt-0.5 max-w-xl"
+        title={job.sourceUrl}
+      >
+        <span class="mr-1" aria-hidden="true">🔗</span>
+        <span>{job.sourceUrl}</span>
+      </a>
+    </div>
+
+    <!-- Badge de Estado Oficial -->
+    <div class="shrink-0">
+      <Badge
+        variant={job.statusConfig.badgeVariant}
+        dot={job.statusConfig.isActive}
+      >
+        {job.statusConfig.label}
+      </Badge>
+    </div>
+  </div>
+
+  <!-- Barra de progreso si está descargando, convirtiendo o completado -->
+  {
+    hasProgress && (
+      <div class="pt-1">
+        <ProgressBar
+          value={job.progress}
+          status={
+            job.status === 'DOWNLOADING'
+              ? 'downloading'
+              : job.status === 'CONVERTING'
+                ? 'converting'
+                : job.status === 'COMPLETED'
+                  ? 'completed'
+                  : 'default'
+          }
+          speed={job.speed}
+          eta={job.eta}
+          label={
+            job.status === 'CONVERTING'
+              ? 'Convirtiendo audio a MP3...'
+              : undefined
+          }
+        />
+      </div>
+    )
+  }
+
+  <!-- Mensaje de error formateado para estados FAILED -->
+  {
+    job.status === 'FAILED' && (
+      <div
+        role="alert"
+        class="p-3 rounded-lg bg-red-950/60 border border-red-800/80 text-xs text-red-200 flex items-start gap-2"
+      >
+        <span class="text-sm shrink-0" aria-hidden="true">
+          ⚠️
+        </span>
+        <div class="flex-1">
+          <p class="font-semibold text-red-100">Fallo en la descarga:</p>
+          <p class="mt-0.5 text-red-200/90">{job.errorMessage}</p>
+          {job.errorCode && (
+            <p class="mt-1 font-mono text-[10px] text-red-400">
+              Código: {job.errorCode}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  <!-- Acciones individuales del trabajo -->
+  {
+    (job.canCancel ||
+      job.canRetry ||
+      job.cancellationRequested ||
+      job.status === 'COMPLETED') && (
+      <div class="flex items-center justify-end gap-2 pt-1">
+        {job.cancellationRequested && (
+          <span class="inline-flex items-center gap-1.5 text-xs text-amber-400 font-medium px-2 py-1 rounded bg-amber-950/40 border border-amber-900/50">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Cancelación solicitada...
+          </span>
+        )}
+
+        {job.canCancel && !job.cancellationRequested && (
+          <button
+            type="button"
+            data-action="cancel-job"
+            data-job-id={job.id}
+            class="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-red-300 hover:bg-red-950/40 border border-slate-700/80 hover:border-red-900/60 transition-colors cursor-pointer"
+            title="Cancelar esta descarga"
+          >
+            <span aria-hidden="true">✕</span>
+            <span>Cancelar</span>
+          </button>
+        )}
+
+        {job.canRetry && (
+          <button
+            type="button"
+            data-action="retry-job"
+            data-job-id={job.id}
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/80 shadow-sm transition-colors cursor-pointer"
+            title="Reintentar esta descarga fallida"
+          >
+            <span aria-hidden="true">🔄</span>
+            <span>Reintentar</span>
+          </button>
+        )}
+
+        {job.status === 'COMPLETED' && (
+          <div class="inline-flex items-center gap-2">
+            {job.artifactStatus === 'delivering' && (
+              <button
+                type="button"
+                disabled
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800 opacity-80 cursor-not-allowed"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Descargando MP3...</span>
+              </button>
+            )}
+
+            {job.artifactStatus === 'downloaded' && (
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-950/40 text-green-400 border border-green-900/50">
+                <span aria-hidden="true">✓</span>
+                <span>Descargado (un solo uso)</span>
+              </span>
+            )}
+
+            {job.artifactStatus === 'expired' && (
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                <span aria-hidden="true">⏱️</span>
+                <span>Artefacto expirado</span>
+              </span>
+            )}
+
+            {job.artifactStatus === 'missing' && (
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-950/30 text-red-400 border border-red-900/40">
+                <span aria-hidden="true">⚠️</span>
+                <span>No disponible</span>
+              </span>
+            )}
+
+            {job.canDownloadArtifact && job.artifactStatus !== 'delivering' && (
+              <button
+                type="button"
+                data-action="download-artifact"
+                data-job-id={job.id}
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors cursor-pointer"
+                title="Descargar archivo MP3 (un solo uso según ADR-0006)"
+              >
+                <span aria-hidden="true">🎵</span>
+                <span>Descargar MP3</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  <!-- Metadatos de auditoría: fecha y reintentos -->
+  <div
+    class="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60 select-none"
+  >
+    <div class="flex items-center gap-3">
+      <span>Creado: <time>{job.createdAtFormatted}</time></span>
+      {
+        job.retryCount > 0 && (
+          <span class="text-amber-400/90 font-medium">
+            Reintentos: {job.retryCount}
+          </span>
+        )
+      }
+    </div>
+
+    <div
+      class="font-mono text-slate-600 truncate max-w-[140px]"
+      title={`ID: ${job.id}`}
+    >
+      ID: {job.id.slice(0, 8)}...
+    </div>
+  </div>
+</article>

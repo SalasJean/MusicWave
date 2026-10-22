@@ -1,0 +1,17 @@
+DELETE /api/v1/queue
+DELETE /api/v1/queue/completed
+GET /api/v1/downloads
+GET /api/v1/downloads/{id}
+GET /api/v1/downloads/{id}/artifact
+GET /api/v1/events
+GET /api/v1/settings
+GET /api/v1/system/status
+GET /api/v1/tools/status
+POST /api/v1/downloads
+POST /api/v1/downloads/bulk
+POST /api/v1/downloads/import
+POST /api/v1/downloads/{id}/cancel
+POST /api/v1/downloads/{id}/retry
+POST /api/v1/queue/cancel
+POST /api/v1/queue/start
+PUT /api/v1/settings

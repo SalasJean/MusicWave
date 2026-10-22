@@ -1,0 +1,115 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  description?: string;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  class?: string;
+}
+
+const {
+  id,
+  title,
+  description,
+  maxWidth = 'md',
+  class: className = '',
+} = Astro.props;
+
+const maxWidthClasses = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+}[maxWidth];
+---
+
+<dialog
+  id={id}
+  aria-labelledby={`${id}-title`}
+  aria-describedby={description ? `${id}-desc` : undefined}
+  class:list={[
+    'fixed inset-0 m-auto bg-transparent p-4 w-full backdrop:bg-slate-950/80 backdrop:backdrop-blur-sm z-50 rounded-xl transition-all',
+    maxWidthClasses,
+    className,
+  ]}
+>
+  <div
+    class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+  >
+    <!-- Header -->
+    <div
+      class="flex items-center justify-between px-6 py-4 border-b border-slate-800"
+    >
+      <div class="min-w-0 pr-4">
+        <h2
+          id={`${id}-title`}
+          class="text-lg font-semibold text-white tracking-wide truncate"
+        >
+          {title}
+        </h2>
+        {
+          description && (
+            <p id={`${id}-desc`} class="text-xs text-slate-400 mt-0.5">
+              {description}
+            </p>
+          )
+        }
+      </div>
+
+      <button
+        type="button"
+        class="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+        aria-label="Cerrar ventana modal"
+        onclick={`document.getElementById('${id}')?.close()`}
+      >
+        <svg
+          class="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div
+      class="px-6 py-4 overflow-y-auto flex-1 text-slate-300 text-sm leading-relaxed"
+    >
+      <slot />
+    </div>
+
+    <!-- Optional Footer -->
+    {
+      Astro.slots.has('footer') && (
+        <div class="px-6 py-3.5 bg-slate-950/50 border-t border-slate-800 flex items-center justify-end gap-3">
+          <slot name="footer" />
+        </div>
+      )
+    }
+  </div>
+</dialog>
+
+<script is:inline define:vars={{ id }}>
+  const dialog = document.getElementById(id);
+  if (dialog) {
+    dialog.addEventListener('click', (event) => {
+      // Close on backdrop click
+      const rect = dialog.getBoundingClientRect();
+      const isInDialog =
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width;
+      if (!isInDialog) {
+        dialog.close();
+      }
+    });
+  }
+</script>

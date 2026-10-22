@@ -1,0 +1,147 @@
+---
+import Modal from '@/shared/components/ui/Modal.astro';
+import Button from '@/shared/components/ui/Button.astro';
+import Textarea from '@/shared/components/ui/Textarea.astro';
+---
+
+<Modal
+  id="bulk-ingest-modal"
+  title="Agregar descargas por lote"
+  description="Pegue una lista de URLs públicas (una por línea, máximo 100)."
+  maxWidth="lg"
+>
+  <form id="bulk-ingest-form" class="space-y-4">
+    <Textarea
+      id="bulk-urls-input"
+      name="urls"
+      label="Lista de URLs"
+      placeholder="https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/watch?v=..."
+      rows={7}
+      required
+      hint="Las líneas vacías se ignorarán. Las URLs inválidas se reportarán sin descartar las válidas."
+    />
+
+    <!-- Área de resultados de aceptación parcial -->
+    <div id="bulk-feedback-area" class="hidden space-y-3 pt-2">
+      <!-- Se inyecta dinámicamente con JS -->
+    </div>
+
+    <div class="flex items-center justify-between pt-2">
+      <span id="bulk-line-counter" class="text-xs text-slate-400">
+        0 URLs detectadas
+      </span>
+
+      <div class="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onclick="document.getElementById('bulk-ingest-modal')?.close()"
+        >
+          Cancelar
+        </Button>
+        <Button type="submit" id="bulk-submit-btn" variant="primary" size="sm">
+          Procesar lote
+        </Button>
+      </div>
+    </div>
+  </form>
+</Modal>
+
+<script>
+  import { downloadStore } from '../stores/downloadStore';
+
+  const modal = document.getElementById(
+    'bulk-ingest-modal'
+  ) as HTMLDialogElement | null;
+  const form = document.getElementById(
+    'bulk-ingest-form'
+  ) as HTMLFormElement | null;
+  const textarea = document.getElementById(
+    'bulk-urls-input'
+  ) as HTMLTextAreaElement | null;
+  const counter = document.getElementById('bulk-line-counter');
+  const feedbackArea = document.getElementById('bulk-feedback-area');
+  const submitBtn = document.getElementById(
+    'bulk-submit-btn'
+  ) as HTMLButtonElement | null;
+
+  if (textarea && counter) {
+    textarea.addEventListener('input', () => {
+      const lines = textarea.value.split('\n').filter((l) => l.trim() !== '');
+      counter.textContent = `${lines.length} URLs detectadas (máx 100)`;
+    });
+  }
+
+  if (form && textarea && submitBtn && feedbackArea && modal) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rawLines = textarea.value
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      if (rawLines.length === 0) {
+        return;
+      }
+
+      if (rawLines.length > 100) {
+        alert('El límite por lote es de 100 URLs.');
+        return;
+      }
+
+      submitBtn.setAttribute('disabled', 'true');
+      submitBtn.setAttribute('aria-busy', 'true');
+      feedbackArea.classList.add('hidden');
+      feedbackArea.innerHTML = '';
+
+      try {
+        const summary = await downloadStore.addBulk(rawLines);
+
+        // Render summary
+        let html = `
+          <div class="p-3 rounded-lg bg-slate-800/90 border border-slate-700 text-xs text-slate-200 space-y-2">
+            <p class="font-semibold text-emerald-400">
+              ✅ ${summary.createdCount} descarga(s) creada(s) exitosamente.
+            </p>
+        `;
+
+        if (summary.rejectedCount > 0) {
+          html += `
+            <div class="border-t border-slate-700 pt-2 text-red-300">
+              <p class="font-medium text-red-400">⚠️ ${summary.rejectedCount} URL(s) rechazada(s):</p>
+              <ul class="list-disc pl-4 space-y-1 mt-1 text-[11px] text-red-300/90 font-mono">
+          `;
+          for (const rej of summary.rejectedItems) {
+            html += `<li>Línea ${rej.position}: ${rej.formattedError} (${rej.value.slice(0, 30)}...)</li>`;
+          }
+          html += `</ul></div>`;
+        }
+
+        html += `</div>`;
+        feedbackArea.innerHTML = html;
+        feedbackArea.classList.remove('hidden');
+
+        if (summary.rejectedCount === 0) {
+          // If all valid, clear input and auto-close after 1.5s
+          textarea.value = '';
+          if (counter) counter.textContent = '0 URLs detectadas';
+          setTimeout(() => {
+            modal.close();
+            feedbackArea.classList.add('hidden');
+          }, 1500);
+        }
+      } catch {
+        feedbackArea.innerHTML = `
+          <div class="p-3 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200">
+            ❌ Error al procesar el lote. Verifique que al menos una URL sea válida.
+          </div>
+        `;
+        feedbackArea.classList.remove('hidden');
+      } finally {
+        submitBtn.removeAttribute('disabled');
+        submitBtn.removeAttribute('aria-busy');
+      }
+    });
+  }
+</script>

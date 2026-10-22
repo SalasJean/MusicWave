@@ -1,0 +1,66 @@
+---
+import Button from '@/shared/components/ui/Button.astro';
+
+interface Props {
+  page: number;
+  totalPages: number;
+  totalElements: number;
+  size?: number;
+  class?: string;
+}
+
+const {
+  page = 0,
+  totalPages = 1,
+  totalElements = 0,
+  class: className = '',
+} = Astro.props;
+
+const currentPageNumber = page + 1;
+const hasPrev = page > 0;
+const hasNext = page < totalPages - 1;
+---
+
+<nav
+  aria-label="Paginación de descargas"
+  class:list={[
+    'flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl border border-slate-800 bg-slate-900/50 text-xs text-slate-400 select-none',
+    className,
+  ]}
+>
+  <!-- Contador de elementos totales -->
+  <div class="flex items-center gap-1.5">
+    <span>Mostrando</span>
+    <span class="font-semibold text-slate-200">
+      Página {currentPageNumber} de {Math.max(totalPages, 1)}
+    </span>
+    <span>({totalElements} descargas en total)</span>
+  </div>
+
+  <!-- Botones de navegación accesible -->
+  <div class="flex items-center gap-2">
+    <Button
+      id="pagination-prev-btn"
+      variant="secondary"
+      size="sm"
+      disabled={!hasPrev}
+      aria-label="Ir a la página anterior"
+      data-target-page={page - 1}
+    >
+      <span aria-hidden="true">&larr;</span>
+      <span>Anterior</span>
+    </Button>
+
+    <Button
+      id="pagination-next-btn"
+      variant="secondary"
+      size="sm"
+      disabled={!hasNext}
+      aria-label="Ir a la página siguiente"
+      data-target-page={page + 1}
+    >
+      <span>Siguiente</span>
+      <span aria-hidden="true">&rarr;</span>
+    </Button>
+  </div>
+</nav>

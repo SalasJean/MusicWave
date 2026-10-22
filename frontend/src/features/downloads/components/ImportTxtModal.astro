@@ -1,0 +1,190 @@
+---
+import Modal from '@/shared/components/ui/Modal.astro';
+import Button from '@/shared/components/ui/Button.astro';
+---
+
+<Modal
+  id="import-txt-modal"
+  title="Importar URLs desde archivo TXT"
+  description="Suba un archivo de texto UTF-8 (máximo 256 KiB) con una URL por línea."
+  maxWidth="md"
+>
+  <form id="import-txt-form" class="space-y-4">
+    <!-- Zona de Dropzone accesible -->
+    <div
+      id="txt-dropzone"
+      class="border-2 border-dashed border-slate-700 hover:border-blue-500/80 rounded-xl p-6 text-center transition-colors bg-slate-900/50 cursor-pointer flex flex-col items-center justify-center gap-2 select-none"
+    >
+      <span class="text-3xl" aria-hidden="true">📄</span>
+      <p class="text-sm font-medium text-slate-200">
+        Arrastre su archivo .txt aquí o haga clic para seleccionar
+      </p>
+      <p class="text-xs text-slate-500">
+        Texto plano UTF-8, máximo 256 KiB (líneas vacías se ignoran)
+      </p>
+
+      <input
+        type="file"
+        id="txt-file-input"
+        name="file"
+        accept=".txt,text/plain"
+        class="hidden"
+        required
+      />
+
+      <!-- Nombre del archivo seleccionado -->
+      <div
+        id="selected-file-info"
+        class="hidden mt-2 text-xs font-semibold text-blue-400 bg-blue-950/60 px-3 py-1 rounded-md border border-blue-800"
+      >
+        <!-- Inyectado dinámicamente -->
+      </div>
+    </div>
+
+    <!-- Feedback de resultados -->
+    <div id="import-feedback-area" class="hidden space-y-3 pt-2">
+      <!-- Inyectado con JS -->
+    </div>
+
+    <div class="flex items-center justify-end gap-2 pt-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onclick="document.getElementById('import-txt-modal')?.close()"
+      >
+        Cancelar
+      </Button>
+      <Button
+        type="submit"
+        id="import-submit-btn"
+        variant="primary"
+        size="sm"
+        disabled
+      >
+        Importar archivo
+      </Button>
+    </div>
+  </form>
+</Modal>
+
+<script>
+  import { downloadStore } from '../stores/downloadStore';
+
+  const modal = document.getElementById(
+    'import-txt-modal'
+  ) as HTMLDialogElement | null;
+  const form = document.getElementById(
+    'import-txt-form'
+  ) as HTMLFormElement | null;
+  const dropzone = document.getElementById('txt-dropzone');
+  const fileInput = document.getElementById(
+    'txt-file-input'
+  ) as HTMLInputElement | null;
+  const fileInfo = document.getElementById('selected-file-info');
+  const submitBtn = document.getElementById(
+    'import-submit-btn'
+  ) as HTMLButtonElement | null;
+  const feedbackArea = document.getElementById('import-feedback-area');
+
+  let selectedFile: File | null = null;
+
+  if (dropzone && fileInput && fileInfo && submitBtn) {
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('border-blue-500', 'bg-slate-800/60');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('border-blue-500', 'bg-slate-800/60');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-blue-500', 'bg-slate-800/60');
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        handleFileSelection(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        handleFileSelection(fileInput.files[0]);
+      }
+    });
+
+    function handleFileSelection(file: File) {
+      // Validate 256 KiB limit (256 * 1024 = 262144 bytes)
+      if (file.size > 262144) {
+        alert('El archivo excede el límite máximo de 256 KiB.');
+        return;
+      }
+      selectedFile = file;
+      if (fileInfo) {
+        fileInfo.textContent = `Archivo: ${file.name} (${(file.size / 1024).toFixed(1)} KiB)`;
+        fileInfo.classList.remove('hidden');
+      }
+      submitBtn?.removeAttribute('disabled');
+    }
+  }
+
+  if (form && submitBtn && feedbackArea && modal) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedFile) return;
+
+      submitBtn.setAttribute('disabled', 'true');
+      submitBtn.setAttribute('aria-busy', 'true');
+      feedbackArea.classList.add('hidden');
+      feedbackArea.innerHTML = '';
+
+      try {
+        const summary = await downloadStore.importTxt(selectedFile);
+
+        let html = `
+          <div class="p-3 rounded-lg bg-slate-800/90 border border-slate-700 text-xs text-slate-200 space-y-2">
+            <p class="font-semibold text-emerald-400">
+              ✅ ${summary.createdCount} descarga(s) creada(s) desde el archivo.
+            </p>
+        `;
+
+        if (summary.rejectedCount > 0) {
+          html += `
+            <div class="border-t border-slate-700 pt-2 text-red-300">
+              <p class="font-medium text-red-400">⚠️ ${summary.rejectedCount} línea(s) rechazada(s):</p>
+              <ul class="list-disc pl-4 space-y-1 mt-1 text-[11px] text-red-300/90 font-mono">
+          `;
+          for (const rej of summary.rejectedItems) {
+            html += `<li>Línea ${rej.position}: ${rej.formattedError} (${rej.value.slice(0, 30)}...)</li>`;
+          }
+          html += `</ul></div>`;
+        }
+
+        html += `</div>`;
+        feedbackArea.innerHTML = html;
+        feedbackArea.classList.remove('hidden');
+
+        if (summary.rejectedCount === 0) {
+          setTimeout(() => {
+            modal.close();
+            feedbackArea.classList.add('hidden');
+            if (fileInfo) fileInfo.classList.add('hidden');
+            selectedFile = null;
+          }, 1500);
+        }
+      } catch {
+        feedbackArea.innerHTML = `
+          <div class="p-3 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200">
+            ❌ Error al importar el archivo TXT. Verifique el formato UTF-8 y contenido.
+          </div>
+        `;
+        feedbackArea.classList.remove('hidden');
+      } finally {
+        submitBtn.removeAttribute('disabled');
+        submitBtn.removeAttribute('aria-busy');
+      }
+    });
+  }
+</script>
