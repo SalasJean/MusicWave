@@ -14,18 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Run backend tests
         working-directory: backend
         run: ./gradlew test --no-daemon
       - name: Upload backend reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-test-reports
           path: backend/**/build/reports/tests/
@@ -34,24 +34,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.23.3'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: Static analysis and unit regression
+      - name: Check Astro and TypeScript
         working-directory: frontend
-        run: |
-          npm run check
-          npm run lint
-          npm run format
-          npm test
-          npm run build
-          npm audit --audit-level=moderate
+        run: npm run check
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+      - name: Verify frontend formatting
+        working-directory: frontend
+        run: npm run format
+      - name: Run frontend regression
+        working-directory: frontend
+        run: npm test -- --reporter=dot
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
 
   black-box-regression:
     needs: [backend-regression, frontend-regression]
@@ -62,17 +71,17 @@ jobs:
       API_BASE_URL: http://localhost:8080
       UI_BASE_URL: http://localhost:4321
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.23.3'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - uses: browser-actions/setup-chrome@v2
       - name: Start API and worker dependencies
         run: docker compose -f infrastructure/compose.yaml up -d --build api worker
@@ -107,7 +116,7 @@ jobs:
         run: ./backend/gradlew -p qa test --no-daemon
       - name: Upload black-box reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: black-box-test-reports
           path: qa/build/reports/tests/
